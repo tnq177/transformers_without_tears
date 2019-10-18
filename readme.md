@@ -3,12 +3,12 @@
 
 This is the *re*-implementation of the paper [Transformers without Tears: Improving the Normalization of Self-Attention](https://arxiv.org/pdf/1910.05895.pdf).  
 
-While the code was initially developed to try out multilingual NMT, all experiments mentioned in the paper and also in this guide are meant for bilingual only. Regarding the multilingual parts of the code, I initially followed [XLM](https://github.com/facebookresearch/XLM) and add the following:  
+While the code was initially developed to experiment with multilingual NMT, all experiments mentioned in the paper and also in this guide are meant for bilingual only. Regarding the multilingual parts of the code, I followed [XLM](https://github.com/facebookresearch/XLM) and added the following changes:  
 
 * language embedding: each language has a an embedding vector which is summed to input word embeddings, similar to positional embedding
-* oversampling data before BPE: we sample sentences from each language based on some weighted probability to ensure that rarer languages are well represented so it won't be broken into very short BPE segments. See [their paper](https://arxiv.org/abs/1901.07291) for more information. My own implementation is in `preprocessing.py`  
+* oversampling data before BPE: First training sentences are grouped by languages, then a heuristic multinomial distribution is calculated based on the size of each language. We sample sentences from each language according to this distribution so that rarer languages are better represented and won't be broken into very short BPE segments. See [their paper](https://arxiv.org/abs/1901.07291) for more information. My own implementation is in `preprocessing.py`  
 
-If we train for bilingual only, adding language embedding and oversampling data won't make any difference (according to my early experiments), however, I keep them in the code since they might be useful later.  
+If we train for bilingual only, adding language embedding and oversampling data won't make any difference (according to my early experiments). I, however, keep them in the code since they might be useful later.  
 
 This code has been tested with only Python 3.6 and PyTorch 1.1.
 ## Input and Preprocessing
@@ -95,11 +95,11 @@ To translate using a checkpoint, run:
 Many options in `configurations.py` are pretty important:  
 
 * ``use_bias``: if set to False, all linear layer won't use bias. Default to True which uses bias.
-* ``fix_norm``: fix the word embedding norm to 1 divide each word embedding vector by its l2 norm ([Improving Lexical Choice in Neural Machine Translation](https://aclweb.org/anthology/N18-1031))
-* ``scnorm``: the ScaleNorm in our paper. This replaces Layer Normalization with a scaled l2-normalization layer which first normalizes input to norm 1 (divide vector by its l2 norm) then scale up by a single, learnable parameter. See ``ScaleNorm`` in ``layers.py``
-* ``mask_logit``: if set to True, for each target language, we set the logits of types that are not in that language's vocabulary to -inf (so after softmax, those probs become 0). The idea is, say src and tgt each has 8000 types in their vocabs, but only 1000 is shared, then we should not predict the other 7000 types in the source.
+* ``fix_norm``: fix the word embedding norm to 1 by dividing each word embedding vector by its l2 norm ([Improving Lexical Choice in Neural Machine Translation](https://aclweb.org/anthology/N18-1031))
+* ``scnorm``: the ScaleNorm in our paper. This replaces Layer Normalization with a scaled l2-normalization layer. It works by first normalizing input to norm 1 (divide vector by its l2 norm) then scale up by a single, learnable parameter. See ``ScaleNorm`` in ``layers.py``
+* ``mask_logit``: if set to True, for each target language, we set the logits of types that are not in its vocabulary to -inf (so after softmax, those probs become 0). The idea is, say src and tgt each has 8000 types in their vocabs, but only 1000 are shared, then we should not predict the other 7000 types in the source.
 * ``pre_act``: if True, do PreNorm (normalization->sublayer->residual-add), else do PostNorm (sublayer->residual-add->normalization). See the paper for more discussion and related works.
-* ``clip_grad``: gradient clipping value. 1.0 works well.
+* ``clip_grad``: gradient clipping value. I find 1.0 works well and stabilizes training as well.
 * ``warmup_steps``: number of warmup steps if we do warmup
 * ``lr_scheduler``: if `ORG_WU` (see `all_constants.py`), we follow the warmup-cooldown schedule in the [original paper](https://arxiv.org/abs/1706.03762). If ``NO_WU``, we use a constant learning rate ``lr`` which is then decayed whenever development BLEU has not improved over ``patience`` evaluations. If ``UPFLAT_WU`` then we do warmup, but then stay at the peak learning rate and decay like ``NO_WU``.
 * ``lr_scale``: multiply learning rate by this value
@@ -114,10 +114,10 @@ Many options in `configurations.py` are pretty important:
 * ``beam_{size, alpha}``: Beam size and length normalization using [Wu et al.'s magic formula](https://arxiv.org/abs/1609.08144)
 
 ## Some other notes
-Because this is my re-implementation from memory, there are many pieces of information I forget. I just want to clarify the followings:
+Because this is my *re*-implementation from memory, there are many pieces of information I forget. I just want to clarify the followings:
 
 * The IWSLT English-Vietnamese dataset is from [paper](http://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf), [data](https://nlp.stanford.edu/projects/nmt/). The other IWSLT datasets are from [paper](https://www.aclweb.org/anthology/N18-2084/), [data](https://github.com/neulab/word-embeddings-for-nmt). I don't remember what is the length limit I use to filter those datasets, but must be approx. 200-250.
-* This code doesn't implement the fixed `g=sqrt(d)` experiments in table 7. One can try those experiments by simply edit the `ScaleNorm` class to take in a `trainable` bool param which determines if `g` is learned or fixed. Then for all normalization layers, set that to False (so we always use `g=sqrt(d)`), except for the final output from the decoder because we want it to scale up to widen the logit range (and sharpen the softmax).
+* This code doesn't implement the fixed `g=sqrt(d)` experiments in table 7. One can try those experiments by simply edit the `ScaleNorm` class to take in a `trainable` bool param which determines if `g` should be learned or fixed. Then for all normalization layers, set that to False (so we always use `g=sqrt(d)`), except for the final output from the decoder because we want it to scale up to widen the logit range (and sharpen the softmax).
 * In the paper, we use early stopping (stop training if dev BLEU has not improved over 20-50 epochs). This code doesn't do that since all kind of early stopping heuristics can sometimes hurt performance. I suggest to just train until learning rate gets too small or max_epochs is reached.
 * The original implementation shuffles the whole training dataset every epoch, then re-generates batches. After reading [fairseq](https://arxiv.org/pdf/1904.01038.pdf), I change it to generating batches at first, then reuse them (but still shuffle their order).
 
