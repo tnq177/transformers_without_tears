@@ -187,7 +187,7 @@ if __name__ == '__main__':
             mask[joint_vocab.get(key, ac.UNK_ID)] = 1
 
         mask_file = join(data_dir, 'mask.{}.npy'.format(lang))
-        np.save(mask_file, mask)
+        np.save(mask_file, mask, allow_pickle=True)
 
     # save all training data as npy files
     for pair in pairs:
@@ -213,5 +213,5 @@ if __name__ == '__main__':
             tgt_data = np.array(tgt_data)
             src_npy_file = join(data_dir, '{}/{}.{}.npy'.format(pair, mode, src_lang))
             tgt_npy_file = join(data_dir, '{}/{}.{}.npy'.format(pair, mode, tgt_lang))
-            np.save(src_npy_file, src_data)
-            np.save(tgt_npy_file, tgt_data)
+            np.save(src_npy_file, src_data, allow_pickle=True)
+            np.save(tgt_npy_file, tgt_data, allow_pickle=True)

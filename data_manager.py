@@ -16,7 +16,7 @@ class DataManager(object):
         self.vocab, self.ivocab = ut.init_vocab(join(args.data_dir, 'vocab.joint'))
         self.logit_masks = {}
         for lang in self.lang_vocab:
-            mask = np.load(join(args.data_dir, 'mask.{}.npy'.format(lang)))
+            mask = np.load(join(args.data_dir, 'mask.{}.npy'.format(lang)), allow_pickle=True)
             self.logit_masks[lang] = torch.from_numpy(mask)
 
     def load_data(self):
@@ -29,8 +29,8 @@ class DataManager(object):
             for mode in [ac.TRAIN, ac.DEV]:
                 src_file = join(data_dir, '{}/{}.{}.npy'.format(pair, mode, src_lang))
                 tgt_file = join(data_dir, '{}/{}.{}.npy'.format(pair, mode, tgt_lang))
-                src = np.load(src_file)
-                tgt = np.load(tgt_file)
+                src = np.load(src_file, allow_pickle=True)
+                tgt = np.load(tgt_file, allow_pickle=True)
                 self.args.logger.info('Loading {}-{}'.format(pair, mode))
                 self.data[pair][mode] = NMTDataset(src, tgt, batch_size)
 

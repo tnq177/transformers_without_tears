@@ -27,10 +27,10 @@ class Transformer(nn.Module):
         else:
             # otherwise, use the same mask for all
             # this only masks out BOS and PAD
-            mask = [1.] * joint_vocab_size
-            mask[ac.BOS_ID] = 0.
-            mask[ac.PAD_ID] = 0.
-            self.logit_mask = torch.tensor(mask).type(torch.uint8)
+            mask = [True] * joint_vocab_size
+            mask[ac.BOS_ID] = False
+            mask[ac.PAD_ID] = False
+            self.logit_mask = torch.tensor(mask).type(torch.bool)
 
         self.word_embedding = Parameter(torch.Tensor(joint_vocab_size, embed_dim))
         self.lang_embedding = Parameter(torch.Tensor(lang_vocab_size, embed_dim))
@@ -83,7 +83,7 @@ class Transformer(nn.Module):
         decoder_mask = decoder_mask.unsqueeze(0).unsqueeze(1)
         decoder_outputs = self.decoder(decoder_inputs, decoder_mask, encoder_outputs, encoder_mask)
 
-        logit_mask = logit_mask if self.logit_mask is None else self.logit_mask
+        logit_mask = logit_mask == 1 if self.logit_mask is None else self.logit_mask
         logits = self.logit_fn(decoder_outputs, word_embedding, logit_mask)
         neglprobs = F.log_softmax(logits, -1) * logit_mask.type(logits.type()).reshape(1, -1)
         targets = targets.reshape(-1, 1)
@@ -121,7 +121,7 @@ class Transformer(nn.Module):
         max_len = src.size(1) + 51
         pos_embedding = ut.get_positional_encoding(embed_dim, max_len)
         word_embedding = F.normalize(self.word_embedding, dim=-1) if self.args.fix_norm else self.word_embedding
-        logit_mask = logit_mask if self.logit_mask is None else self.logit_mask
+        logit_mask = logit_mask == 1 if self.logit_mask is None else self.logit_mask
         tgt_lang_embed = self.lang_embedding[tgt_lang_idx]
 
         encoder_inputs = self.get_input(src, src_lang_idx, word_embedding, pos_embedding)
