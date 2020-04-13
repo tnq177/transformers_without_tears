@@ -56,7 +56,7 @@ class Transformer(nn.Module):
         if self.training and 0 < p < 1:
             non_pad_mask = toks != ac.PAD_ID
             mask = (torch.rand(toks.size()) <= p).type(non_pad_mask.type())
-            mask = (mask + non_pad_mask) >= 2
+            mask = mask & non_pad_mask
             toks[mask] = ac.UNK_ID
 
     def get_input(self, toks, lang_idx, word_embedding, pos_embedding):
