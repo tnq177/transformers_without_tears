@@ -10,7 +10,7 @@ While the code was initially developed to experiment with multilingual NMT, all 
 
 If we train for bilingual only, adding language embedding and oversampling data won't make any difference (according to my early experiments). I, however, keep them in the code since they might be useful later.  
 
-This code has been tested with only Python 3.6 and PyTorch 1.4.
+This code has been tested with only Python 3.6 and PyTorch 1.4. Pretrained models (retrained, not the ones from the paper): [ted gl2en with warmup](https://drive.google.com/file/d/1yhzSLtAHTOjVTFPdpydrBRlm8lhx2jm8/view?usp=sharing), [iwslt15 en-vi with warmup](https://drive.google.com/file/d/1E4suCr-UDlMtjeNCdTrilYU8Szw56m2X/view?usp=sharing) and [without warmup](https://drive.google.com/file/d/1zgnOr1PmHEdt6_0q2Ebt07eOcfnJU-EX/view)
 ## Input and Preprocessing
 Under a `data` directory, for each language pair of `src_lang` and `tgt_lang`, create a folder of name `src_lang2tgt_lang` which has the following files:
 
