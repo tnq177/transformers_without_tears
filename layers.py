@@ -340,8 +340,8 @@ class Decoder(nn.Module):
         batch_idxs = torch.arange(batch_size)
         for time_step in range(1, maximum_length + 1):
             surpass_length = (max_len < time_step) + (time_step == maximum_length)
-            finished_decoded = torch.sum(all_symbols[:, :, -1] == eos_id, -1) == beam_size
-            finished_sents = ((surpass_length + finished_decoded) >= 1).type(encoder_mask.type())
+            finished_decoded = torch.sum((all_symbols[:, :, -1] == eos_id).type(max_len.type()), -1) == beam_size
+            finished_sents = surpass_length + finished_decoded
             if finished_sents.any():
                 for j in range(finished_sents.size(0)):
                     if finished_sents[j]:
@@ -374,7 +374,7 @@ class Decoder(nn.Module):
             last_probs = last_probs.reshape(-1, 1) # [bsz x beam, 1]
             last_scores = last_scores.reshape(-1, 1)
             length_penalty = 1.0 if alpha == -1 else (5.0 + time_step + 1.0) ** alpha / 6.0 ** alpha
-            finished_mask = (last_symbols.reshape(-1) == eos_id).type(encoder_mask.type())
+            finished_mask = last_symbols.reshape(-1) == eos_id
             beam_probs = probs.clone()
             if finished_mask.any():
                 beam_probs[finished_mask] = last_probs[finished_mask].expand(-1, num_classes).masked_fill(not_eos_mask, float('-inf'))
