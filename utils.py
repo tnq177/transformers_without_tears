@@ -44,7 +44,7 @@ def get_positional_encoding(dim, sentence_length):
     pos = torch.arange(end=float(sentence_length), device=device).reshape(-1, 1)
     encoded_vec = torch.matmul(pos, div_term)
     encoded_vec[:, 0::2] = torch.sin(encoded_vec[:, 0::2])
-    encoded_vec[:, 1::2] = torch.sin(encoded_vec[:, 1::2])
+    encoded_vec[:, 1::2] = torch.cos(encoded_vec[:, 1::2])
 
     return encoded_vec.reshape([sentence_length, dim])
 
