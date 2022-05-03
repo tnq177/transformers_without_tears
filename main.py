@@ -9,6 +9,7 @@ from controller import Controller
 from data_manager import DataManager
 from model import Transformer
 
+import all_constants as ac
 import utils as ut
 import configurations
 
@@ -32,20 +33,19 @@ def get_parser():
                         help='How often do we log training progress (# of batches)')
     parser.add_argument('--config', type=str, required=True,
                         help='Model and training configuration, see configurations.py')
-    parser.add_argument('--debug', choices=['none', 'weak', 'strong'], default='none',
-                        help='Set debug level (strong=fully 100% deterministic, weak=some randomness removed)')
+    parser.add_argument('--fix-random-seed', action=store_true,
+                        help='Use a fixed random seed, for reproducibility')
+
     return parser
 
 
 if __name__ == '__main__':
     args = get_parser().parse_args()
 
-    if args.debug == 'strong':
-        import os
-        os.environ['PYTHONHASHSEED']=str(seed_value)
-    if args.debug == 'weak':
+    if args.fix_random_seed:
         np.random.seed(ac.SEED)
         torch.manual_seed(ac.SEED)
+        torch.cuda.manual_seed(ac.SEED)
 
     config = getattr(configurations, args.config)()
     for k, v in config.items():
