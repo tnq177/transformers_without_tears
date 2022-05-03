@@ -4,11 +4,6 @@ import torch
 import all_constants as ac
 import utils as ut
 
-if torch.cuda.is_available():
-    torch.cuda.manual_seed(ac.SEED)
-else:
-    torch.manual_seed(ac.SEED)
-
 
 class Controller(object):
     def __init__(self, args, model, data_manager, io):

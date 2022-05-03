@@ -2,8 +2,6 @@ import numpy as np
 import torch
 import all_constants as ac
 
-np.random.seed(ac.SEED)
-
 
 class DataManager(object):
     def __init__(self, args, io):

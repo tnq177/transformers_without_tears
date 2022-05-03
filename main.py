@@ -31,11 +31,20 @@ def get_parser():
                         help='How often do we log training progress (# of batches)')
     parser.add_argument('--config', type=str, required=True,
                         help='Model and training configuration, see configurations.py')
+    parser.add_argument('--fix-random-seed', action='store_true',
+                        help='Use a fixed random seed, for reproducibility')
+
     return parser
 
 
 if __name__ == '__main__':
     args = get_parser().parse_args()
+
+    if args.fix_random_seed:
+        np.random.seed(ac.SEED)
+        torch.manual_seed(ac.SEED)
+        torch.cuda.manual_seed(ac.SEED)
+
     config = getattr(configurations, args.config)()
     for k, v in config.items():
         setattr(args, k, v)
