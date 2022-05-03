@@ -33,7 +33,7 @@ def get_parser():
                         help='How often do we log training progress (# of batches)')
     parser.add_argument('--config', type=str, required=True,
                         help='Model and training configuration, see configurations.py')
-    parser.add_argument('--fix-random-seed', action=store_true,
+    parser.add_argument('--fix-random-seed', action='store_true',
                         help='Use a fixed random seed, for reproducibility')
 
     return parser
