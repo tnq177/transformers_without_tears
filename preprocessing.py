@@ -5,12 +5,9 @@ from collections import Counter
 import subprocess
 import numpy as np
 import all_constants as ac
-import utils as ut
 
 np.random.seed(ac.SEED)
 random.seed(ac.SEED)
-
-# TODO(darcey): check for places that call old functions (I know init_vocab is in here)
 
 def get_parser():
     parser = argparse.ArgumentParser()
