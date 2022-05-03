@@ -32,11 +32,11 @@ if __name__ == '__main__':
     args = get_parser().parse_args()
 
     data_dir = args.data_dir
-    pairs = args.pairs.split(',')
+    pairs = list(sorted(args.pairs.split(',')))
     langs = []
     for pair in pairs:
         langs.extend(pair.split('2'))
-    langs = list(set(langs))
+    langs = list(sorted(set(langs)))
     print('Languages: ', langs)
 
     # save language vocab
