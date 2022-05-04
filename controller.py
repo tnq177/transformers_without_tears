@@ -317,9 +317,9 @@ class Controller(object):
         for i, r in enumerate(sorted_rows):
             trans_ids = symbols[r]
             trans_out = ids_to_trans(trans_ids)
-            beam_trans.append([trans_out, scores[r], probs[r])
+            beam_trans.append([trans_out, scores[r], probs[r]])
             if i == 0: # highest prob trans
-                best_trans = trans_out
+                best_trans = [trans_out, scores[r], probs[r]]
 
         return best_trans, beam_trans
 

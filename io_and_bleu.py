@@ -1,5 +1,6 @@
 import re
 import logging
+import os
 from os.path import join, exists
 from subprocess import Popen, PIPE
 import shutil
@@ -8,7 +9,8 @@ import numpy as np
 import torch
 import all_constants as ac
 
-class IO:
+
+class IO(object):
     def __init__(self, args):
         self.data_dir = args.data_dir
         self.dump_dir = args.dump_dir
@@ -29,7 +31,7 @@ class IO:
         self.pairs = args.pairs.split(',')
         
         # data files
-        self.data_files = _construct_data_filenames()
+        self.data_files = self._construct_data_filenames()
         
         # dump files
         dump_dir = args.dump_dir
@@ -51,7 +53,7 @@ class IO:
             data_files[lang] = {}
             mask_file = join(data_dir, f'mask.{lang}.npy')
             if not exists(mask_file):
-                raise ValueError(f'Mask file for {pair} not found at {mask_file}')
+                raise ValueError(f'Mask file for {lang} not found at {mask_file}')
             data_files[lang]['mask'] = mask_file
         
         for pair in self.pairs:
@@ -66,9 +68,10 @@ class IO:
                 if mode != ac.TEST:
                     data_files[pair][mode]['src_npy'] = join(data_dir, f'{pair}/{mode}.{src_lang}.npy')
                     data_files[pair][mode]['tgt_npy'] = join(data_dir, f'{pair}/{mode}.{tgt_lang}.npy')
-                for filename in data_files[pair][mode]:
+                for key in data_files[pair][mode]:
+                    filename = data_files[pair][mode][key]
                     if not exists(filename):
-                        raise ValueError(f'Data file for {pair} not found at {mask_file}')
+                        raise ValueError(f'Data file for {pair} not found at {filename}')
 
         return data_files
         
@@ -100,11 +103,11 @@ class IO:
         return trans_path
     
     def _construct_test_trans_path(self, pair, best, input_file):
-        src_file = input_file if input_file else data_files[pair][mode]['src_orig']
+        src_file = input_file if input_file else self.data_files[pair][ac.TEST]['src_orig']
         if best:
-            return src_file + '.best_trans'
+            return src_file, src_file + '.best_trans'
         else:
-            return src_file + '.beam_trans'
+            return src_file, src_file + '.beam_trans'
 
     def get_logger(self):
         """Global logger for every logging"""
@@ -190,7 +193,7 @@ class IO:
     
     def _remove_ckpt(self, pair, score):
         ckpt_path = self._construct_ckpt_path(pair, score)
-        if os.path.exists(ckpt_path):
+        if exists(ckpt_path):
             self.logger.info('rm {}'.format(ckpt_path))
             os.remove(ckpt_path)
 
@@ -198,8 +201,8 @@ class IO:
         best_score = max(self.dev_bleus[pair])
         return self._load_ckpt(pair, best_score)
 
-    def save_current_checkpoint(self, state_dict):
-        self._save_ckpt(self, state_dict)
+    def save_current_ckpt(self, state_dict):
+        self._save_ckpt(state_dict)
 
     def update_best_ckpt(self, state_dict, pair=None):
         pair_name = pair if pair else 'all'
@@ -272,11 +275,11 @@ class IO:
         self._print_beam_trans(pair, beam_trans, bpe_beam_trans_file)
         
         # merge BPE
-        self._remove_bpe(best_trans_file, nobpe_best_trans_file)
-        self._remove_bpe(beam_trans_file, nobpe_beam_trans_file)
+        self._remove_bpe(bpe_best_trans_file, nobpe_best_trans_file)
+        self._remove_bpe(bpe_beam_trans_file, nobpe_beam_trans_file)
         
         # calculate BLEU
-        bleu, msg = ut.calc_bleu(nobpe_best_trans_file, ref_file)
+        bleu, msg = self._calc_bleu(nobpe_best_trans_file, ref_file)
         self.logger.info(msg)
         self.dev_bleus[pair].append(bleu)
 
@@ -292,8 +295,8 @@ class IO:
         self.dev_bleus['all'].append(score)
 
     def print_test_translations(self, pair, best_trans, beam_trans, input_file=None):
-        best_trans_file = self._construct_test_trans_path(pair, best=True, input_file)
-        beam_trans_file = self._construct_test_trans_path(pair, best=False, input_file)
+        src_file, best_trans_file = self._construct_test_trans_path(pair, best=True, input_file=input_file)
+        src_file, beam_trans_file = self._construct_test_trans_path(pair, best=False, input_file=input_file)
         
         self._print_best_trans(pair, best_trans, best_trans_file)
         self._print_beam_trans(pair, beam_trans, beam_trans_file)

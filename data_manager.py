@@ -22,7 +22,7 @@ class DataManager(object):
             self.data[pair] = {}
             for mode in [ac.TRAIN, ac.DEV]:
                 src = self.io.load_npy_data(pair, mode, src=True)
-                tgt = self.io.load_npy_data(pair, mode, tgt=True)
+                tgt = self.io.load_npy_data(pair, mode, src=False)
                 self.args.logger.info('Loading {}-{}'.format(pair, mode))
                 self.data[pair][mode] = NMTDataset(src, tgt, batch_size)
 
@@ -72,7 +72,7 @@ class DataManager(object):
     def get_translate_batches(self, pair, mode, input_file=None, batch_size=4096):
         data = []
         lens = []
-        raw_data = self.io.load_bpe_data(pair, mode, src=True, input_file)
+        raw_data = self.io.load_bpe_data(pair, mode, src=True, input_file=input_file)
         for tokenized_line in raw_data:
             ids = [self.vocab.get(tok, ac.UNK_ID) for tok in tokenized_line] + [ac.EOS_ID]
             data.append(ids)
