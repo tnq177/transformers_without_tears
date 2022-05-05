@@ -319,7 +319,7 @@ class Controller(object):
             trans_out = ids_to_trans(trans_ids)
             beam_trans.append([trans_out, scores[r], probs[r]])
             if i == 0: # highest prob trans
-                best_trans = [trans_out, scores[r], probs[r]]
+                best_trans = trans_out
 
         return best_trans, beam_trans
 

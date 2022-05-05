@@ -78,12 +78,13 @@ class IO(object):
     def _construct_ckpt_path(self, pair, score):
         dump_dir = self.dump_dir
         if pair is None:
-            ckpt_path = join(dump_dir, 'model.pth')
+            pair = 'model'
+        
+        if score is None:
+            ckpt_path = join(dump_dir, f'{pair}.pth')
         else:
-            if score is None:
-                ckpt_path = join(dump_dir, f'{pair}.pth')
-            else:
-                ckpt_path = join(dump_dir, f'{pair}-{score}.pth')
+            ckpt_path = join(dump_dir, f'{pair}-{score}.pth')
+        
         return ckpt_path
     
     def _construct_dev_trans_path(self, pair, best, bpe, score=None):
@@ -103,7 +104,7 @@ class IO(object):
         return trans_path
     
     def _construct_test_trans_path(self, pair, best, input_file):
-        src_file = input_file if input_file else self.data_files[pair][ac.TEST]['src_orig']
+        src_file = input_file if input_file else self.data_files[pair][ac.TEST]['src_bpe']
         if best:
             return src_file, src_file + '.best_trans'
         else:
@@ -209,31 +210,29 @@ class IO(object):
         if self.dev_bleus[pair_name][-1] == max(self.dev_bleus[pair_name]):
             # remove previous best ckpt
             if len(self.dev_bleus[pair_name]) > 1:
-                self._remove_ckpt(pair_name, max(self.dev_bleus[pair_name][:-1]))
+                self._remove_ckpt(pair, max(self.dev_bleus[pair_name][:-1]))
             self._save_ckpt(state_dict, pair, self.dev_bleus[pair_name][-1])
-
-    def _line_string(self, line):
-        (words, score, prob) = line
-        joined_words = ' '.join(words)
-        return f'{joined_words} ||| {score:.3f} {prob:.3f}'
     
     def _print_best_trans(self, pair, best_trans, best_trans_file):
-        best_trans_strings = []
+        all_best_trans = ''
         for line in best_trans:
-            best_trans_strings.append(self._line_string(line))
-        all_best_trans = '\n'.join(best_trans_strings)
-        
+            line_string = ' '.join(line)
+            all_best_trans += line_string + '\n'
+
         open(best_trans_file, 'w').close()
         with open(best_trans_file, 'w') as fout:
             fout.write(all_best_trans)        
     
     def _print_beam_trans(self, pair, beam_trans, beam_trans_file):
-        new_beam_trans = []
+        all_beam_trans = ''
         for beam in beam_trans:
-            beam_strings = map(self._line_string, beam)
-            beam_strings = '\n'.join(beam_strings)
-            new_beam_trans.append(beam_strings)
-        all_beam_trans = '\n\n'.join(new_beam_trans)
+            beam_strings = []
+            for (line, score, prob) in beam:
+                line_string = ' '.join(line)
+                full_string = f'{line_string} ||| {score:.3f} {prob:.3f}'
+                beam_strings.append(full_string)
+            beam_string = '\n'.join(beam_strings)
+            all_beam_trans += beam_string + '\n\n'
 
         open(beam_trans_file, 'w').close()
         with open(beam_trans_file, 'w') as fout:

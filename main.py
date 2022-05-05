@@ -79,6 +79,7 @@ if __name__ == '__main__':
         files_langs = args.files_langs
         for fl in files_langs:
             input_file, src_lang, tgt_lang = fl.split(',')
+            pair = f'{src_lang}2{tgt_lang}'
             all_best_trans, all_beam_trans = controller.translate(pair, ac.TEST, input_file=input_file)
             io.print_test_translations(pair, all_best_trans, all_beam_trans, input_file=input_file)
     else:
