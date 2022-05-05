@@ -1,6 +1,4 @@
 import argparse
-from os.path import join, exists
-from subprocess import Popen
 
 import numpy as np
 import torch
@@ -8,11 +6,11 @@ import torch
 from controller import Controller
 from data_manager import DataManager
 from model import Transformer
+from io_and_bleu import IO
 
 import all_constants as ac
 import utils as ut
 import configurations
-
 
 def get_parser():
     parser = argparse.ArgumentParser()
@@ -50,25 +48,17 @@ if __name__ == '__main__':
     config = getattr(configurations, args.config)()
     for k, v in config.items():
         setattr(args, k, v)
-
-    if not exists(args.bleu_script):
-        raise ValueError('Bleu script not found at {}'.format(args.bleu_script))
-
-    dump_dir = args.dump_dir
-    Popen('mkdir -p %s' % dump_dir, shell=True).wait()
+    io = IO(args)
 
     # model needs these vocab sizes, but it's better to be calculated here
-    vocab_file = join(args.data_dir, 'vocab.joint')
-    vocab, _ = ut.init_vocab(vocab_file)
+    vocab, _ = io.load_vocab()
     args.joint_vocab_size = len(vocab)
 
-    lang_vocab_file = join(args.data_dir, 'lang.vocab')
-    lang_vocab, _ = ut.init_vocab(lang_vocab_file)
+    lang_vocab, _ = io.load_lang_vocab()
     args.lang_vocab_size = len(lang_vocab)
 
     # since args is passed to many modules, keep logger with it instead of reinit everytime
-    log_file = join(dump_dir, 'DEBUG.log')
-    logger = args.logger = ut.get_logger(log_file)
+    logger = args.logger = io.get_logger()
 
     # log args for future reference
     logger.info(args)
@@ -80,8 +70,8 @@ if __name__ == '__main__':
     logger.info('Model has {:,} parameters'.format(param_count))
 
     # controller
-    data_manager = DataManager(args)
-    controller = Controller(args, model, data_manager)
+    data_manager = DataManager(args, io)
+    controller = Controller(args, model, data_manager, io)
     if args.mode == 'train':
         controller.train()
     elif args.mode == 'translate':
@@ -89,6 +79,8 @@ if __name__ == '__main__':
         files_langs = args.files_langs
         for fl in files_langs:
             input_file, src_lang, tgt_lang = fl.split(',')
-            controller.translate(input_file, src_lang, tgt_lang)
+            pair = f'{src_lang}2{tgt_lang}'
+            all_best_trans, all_beam_trans = controller.translate(pair, ac.TEST, input_file=input_file)
+            io.print_test_translations(pair, all_best_trans, all_beam_trans, input_file=input_file)
     else:
         raise ValueError('Unknown mode. Only train/translate.')

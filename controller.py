@@ -1,20 +1,17 @@
-import os
-import shutil
-import pickle
 import time
 import numpy as np
 import torch
-from os.path import join
 import all_constants as ac
 import utils as ut
 
 
 class Controller(object):
-    def __init__(self, args, model, data_manager):
+    def __init__(self, args, model, data_manager, io):
         super(Controller, self).__init__()
         self.args = args
         self.model = model
         self.data_manager = data_manager
+        self.io = io
         self.logger = args.logger
 
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -79,11 +76,7 @@ class Controller(object):
                 break
 
         self.logger.info('XONGGGGGGG!!! FINISHEDDDD!!!')
-        train_stats_file = join(self.args.dump_dir, 'train_stats.pkl')
-        self.logger.info('Dump stats to {}'.format(train_stats_file))
-        open(train_stats_file, 'w').close()
-        with open(train_stats_file, 'wb') as fout:
-            pickle.dump(self.stats, fout)
+        self.io.save_train_stats(self.stats)
 
         self.logger.info('All pairs avg BLEUs:')
         self.logger.info(self.stats['avg_bleus'])
@@ -99,14 +92,9 @@ class Controller(object):
         self.logger.info('Translating test file')
         for pair in self.pairs:
             # Load best ckpt
-            best_score = max(self.stats[pair]['dev_bleus'])
-            ckpt_file = join(self.args.dump_dir, '{}-{}.pth'.format(pair, best_score))
-            self.logger.info('Reload {}'.format(ckpt_file))
-            self.model.load_state_dict(torch.load(ckpt_file))
-
-            src_lang, tgt_lang = pair.split('2')
-            test_file = join(self.args.data_dir, '{}/test.{}.bpe'.format(pair, src_lang))
-            self.translate(test_file, src_lang, tgt_lang)
+            self.model.load_state_dict(self.io.load_best_ckpt(pair))
+            all_best_trans, all_beam_trans = self.translate(pair, ac.TEST)
+            self.io.print_test_translations(pair, all_best_trans, all_beam_trans)
 
     def run_log(self, batch_num, epoch_num):
         start = time.time()
@@ -233,22 +221,14 @@ class Controller(object):
         self.eval_bleu()
 
         # save current ckpt
-        self.save_ckpt('model')
+        self.io.save_current_ckpt(self.model.state_dict())
 
         # save per-language-pair best ckpt
         for pair in self.pairs:
-            if self.stats[pair]['dev_bleus'][-1] == max(self.stats[pair]['dev_bleus']):
-                # remove previous best ckpt
-                if len(self.stats[pair]['dev_bleus']) > 1:
-                    self.remove_ckpt(pair, max(self.stats[pair]['dev_bleus'][:-1]))
-                self.save_ckpt(pair, self.stats[pair]['dev_bleus'][-1])
+            self.io.update_best_ckpt(self.model.state_dict(), pair)
 
         # save all-language-pair best ckpt
-        if self.stats['avg_bleus'][-1] == max(self.stats['avg_bleus']):
-            # remove previous best ckpt
-            if len(self.stats['avg_bleus']) > 1:
-                self.remove_ckpt('model', max(self.stats['avg_bleus'][:-1]))
-            self.save_ckpt('model', self.stats['avg_bleus'][-1])
+        self.io.update_best_ckpt(self.model.state_dict())
 
         # it's we do warmup and it's still in warmup phase, don't anneal
         if self.lr_scheduler == ac.ORG_WU or self.lr_scheduler == ac.UPFLAT_WU and self.stats['step'] < self.warm_steps:
@@ -265,24 +245,6 @@ class Controller(object):
             self.lr = self.lr * self.lr_decay
             for p in self.optimizer.param_groups:
                 p['lr'] = self.lr
-
-    def save_ckpt(self, model_name, score=None):
-        dump_dir = self.args.dump_dir
-        if score is None:
-            ckpt_path = join(dump_dir, '{}.pth'.format(model_name))
-            self.logger.info('Save current ckpt to {}'.format(ckpt_path))
-        else:
-            ckpt_path = join(dump_dir, '{}-{}.pth'.format(model_name, score))
-            self.logger.info('Save best ckpt for {} to {}'.format(model_name, ckpt_path))
-
-        torch.save(self.model.state_dict(), ckpt_path)
-
-    def remove_ckpt(self, model_name, score):
-        # never remove current ckpt so always ask for score
-        ckpt_path = join(self.args.dump_dir, '{}-{}.pth'.format(model_name, score))
-        if os.path.exists(ckpt_path):
-            self.logger.info('rm {}'.format(ckpt_path))
-            os.remove(ckpt_path)
 
     def eval_ppl(self):
         self.logger.info('Evaluate dev perplexity')
@@ -326,52 +288,15 @@ class Controller(object):
         start = time.time()
         self.model.eval()
         avg_bleus = []
-        dump_dir = self.args.dump_dir
         with torch.no_grad():
             for pair in self.pairs:
                 self.logger.info('--> {}'.format(pair))
-                src_lang, tgt_lang = pair.split('2')
-                src_lang_idx = self.data_manager.lang_vocab[src_lang]
-                tgt_lang_idx = self.data_manager.lang_vocab[tgt_lang]
-                logit_mask = self.data_manager.logit_masks[tgt_lang]
-                data = self.data_manager.translate_data[pair]
-                src_batches = data['src_batches']
-                sorted_idxs = data['sorted_idxs']
-                ref_file = data['ref_file']
-
-                all_best_trans, all_beam_trans = self._translate(src_batches, sorted_idxs, src_lang_idx, tgt_lang_idx, logit_mask)
-
-                all_best_trans = ''.join(all_best_trans)
-                best_trans_file = join(dump_dir, '{}_val_trans.txt.bpe'.format(pair))
-                open(best_trans_file, 'w').close()
-                with open(best_trans_file, 'w') as fout:
-                    fout.write(all_best_trans)
-
-                all_beam_trans = ''.join(all_beam_trans)
-                beam_trans_file = join(dump_dir, '{}_beam_trans.txt.bpe'.format(pair))
-                open(beam_trans_file, 'w').close()
-                with open(beam_trans_file, 'w') as fout:
-                    fout.write(all_beam_trans)
-
-                # merge BPE
-                nobpe_best_trans_file = join(dump_dir, '{}_val_trans.txt'.format(pair))
-                ut.remove_bpe(best_trans_file, nobpe_best_trans_file)
-                nobpe_beam_trans_file = join(dump_dir, '{}_beam_trans.txt'.format(pair))
-                ut.remove_bpe(beam_trans_file, nobpe_beam_trans_file)
-
-                # calculate BLEU
-                bleu, msg = ut.calc_bleu(self.args.bleu_script, nobpe_best_trans_file, ref_file)
-                self.logger.info(msg)
+                all_best_trans, all_beam_trans = self.translate(pair, ac.DEV)
+                bleu = self.io.print_dev_translations_and_calculate_BLEU(pair, all_best_trans, all_beam_trans)
                 avg_bleus.append(bleu)
                 self.stats[pair]['dev_bleus'].append(bleu)
-
-                # save translation with BLEU score for future reference
-                trans_file = '{}-{}'.format(nobpe_best_trans_file, bleu)
-                shutil.copyfile(nobpe_best_trans_file, trans_file)
-                beam_file = '{}-{}'.format(nobpe_beam_trans_file, bleu)
-                shutil.copyfile(nobpe_beam_trans_file, beam_file)
-
         avg_bleu = sum(avg_bleus) / len(avg_bleus)
+        self.io.save_avg_bleu_score(avg_bleu)
         self.stats['avg_bleus'].append(avg_bleu)
         self.logger.info('avg_bleu = {}'.format(avg_bleu))
         self.logger.info('Done evaluating dev BLEU, it takes {} seconds'.format(ut.format_seconds(time.time() - start)))
@@ -384,7 +309,7 @@ class Controller(object):
                     break
                 words.append(self.data_manager.ivocab[idx])
 
-            return ' '.join(words)
+            return words
 
         sorted_rows = np.argsort(scores)[::-1]
         best_trans = None
@@ -392,11 +317,11 @@ class Controller(object):
         for i, r in enumerate(sorted_rows):
             trans_ids = symbols[r]
             trans_out = ids_to_trans(trans_ids)
-            beam_trans.append('{} ||| {:.3f} {:.3f}'.format(trans_out, scores[r], probs[r]))
+            beam_trans.append([trans_out, scores[r], probs[r]])
             if i == 0: # highest prob trans
                 best_trans = trans_out
 
-        return best_trans, '\n'.join(beam_trans)
+        return best_trans, beam_trans
 
     def _translate(self, src_batches, sorted_idxs, src_lang_idx, tgt_lang_idx, logit_mask):
         all_best_trans = [''] * sorted_idxs.shape[0]
@@ -416,8 +341,8 @@ class Controller(object):
                     symbols = x['symbols'].cpu().detach().numpy()
 
                     best_trans, beam_trans = self.get_trans(probs, scores, symbols)
-                    all_best_trans[sorted_idxs[count]] = best_trans + '\n'
-                    all_beam_trans[sorted_idxs[count]] = beam_trans + '\n\n'
+                    all_best_trans[sorted_idxs[count]] = best_trans
+                    all_beam_trans[sorted_idxs[count]] = beam_trans
 
                     count += 1
                     if count % 100 == 0:
@@ -427,26 +352,17 @@ class Controller(object):
 
         return all_best_trans, all_beam_trans
 
-    def translate(self, src_file, src_lang, tgt_lang, batch_size=4096):
-        src_batches, sorted_idxs = self.data_manager.get_translate_batches(src_file, batch_size=batch_size)
+    def translate(self, pair, mode, input_file=None, batch_size=4096):
+        src_lang, tgt_lang = pair.split('2')
+
         src_lang_idx = self.data_manager.lang_vocab[src_lang]
         tgt_lang_idx = self.data_manager.lang_vocab[tgt_lang]
         logit_mask = self.data_manager.logit_masks[tgt_lang]
-        all_best_trans, all_beam_trans = self._translate(src_batches, sorted_idxs, src_lang_idx, tgt_lang_idx, logit_mask)
+        if mode == ac.DEV:
+            data = self.data_manager.translate_data[pair]
+            src_batches = data['src_batches']
+            sorted_idxs = data['sorted_idxs']
+        else:
+            src_batches, sorted_idxs = self.data_manager.get_translate_batches(pair, mode, input_file=input_file, batch_size=batch_size)
 
-        # write to file
-        all_best_trans = ''.join(all_best_trans)
-        best_trans_file = src_file + '.best_trans'
-        open(best_trans_file, 'w').close()
-        with open(best_trans_file, 'w') as fout:
-            fout.write(all_best_trans)
-
-        all_beam_trans = ''.join(all_beam_trans)
-        beam_trans_file = src_file + '.beam_trans'
-        open(beam_trans_file, 'w').close()
-        with open(beam_trans_file, 'w') as fout:
-            fout.write(all_beam_trans)
-
-        self.logger.info('Finish decode {}'.format(src_file))
-        self.logger.info('Best --> {}'.format(best_trans_file))
-        self.logger.info('Beam --> {}'.format(beam_trans_file))
+        return self._translate(src_batches, sorted_idxs, src_lang_idx, tgt_lang_idx, logit_mask)

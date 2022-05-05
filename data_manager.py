@@ -1,34 +1,28 @@
-from os.path import join
 import numpy as np
 import torch
 import all_constants as ac
-import utils as ut
 
 
 class DataManager(object):
-    def __init__(self, args):
+    def __init__(self, args, io):
         super(DataManager, self).__init__()
         self.args = args
+        self.io = io
         self.pairs = args.pairs.split(',')
-        self.lang_vocab, self.lang_ivocab = ut.init_vocab(join(args.data_dir, 'lang.vocab'))
-        self.vocab, self.ivocab = ut.init_vocab(join(args.data_dir, 'vocab.joint'))
+        self.lang_vocab, self.lang_ivocab = io.load_lang_vocab()
+        self.vocab, self.ivocab = io.load_vocab()
         self.logit_masks = {}
         for lang in self.lang_vocab:
-            mask = np.load(join(args.data_dir, 'mask.{}.npy'.format(lang)), allow_pickle=True)
-            self.logit_masks[lang] = torch.from_numpy(mask)
+            self.logit_masks[lang] = io.load_logit_mask(lang)
 
     def load_data(self):
         self.data = {}
-        data_dir = self.args.data_dir
         batch_size = self.args.batch_size
         for pair in self.pairs:
             self.data[pair] = {}
-            src_lang, tgt_lang = pair.split('2')
             for mode in [ac.TRAIN, ac.DEV]:
-                src_file = join(data_dir, '{}/{}.{}.npy'.format(pair, mode, src_lang))
-                tgt_file = join(data_dir, '{}/{}.{}.npy'.format(pair, mode, tgt_lang))
-                src = np.load(src_file, allow_pickle=True)
-                tgt = np.load(tgt_file, allow_pickle=True)
+                src = self.io.load_npy_data(pair, mode, src=True)
+                tgt = self.io.load_npy_data(pair, mode, src=False)
                 self.args.logger.info('Loading {}-{}'.format(pair, mode))
                 self.data[pair][mode] = NMTDataset(src, tgt, batch_size)
 
@@ -49,15 +43,11 @@ class DataManager(object):
         # load dev translate batches
         self.translate_data = {}
         for pair in self.pairs:
-            src_lang, tgt_lang = pair.split('2')
-            src_file = join(data_dir, '{}/{}.{}.bpe'.format(pair, ac.DEV, src_lang))
-            ref_file = join(data_dir, '{}/{}.{}'.format(pair, ac.DEV, tgt_lang))
             self.args.logger.info('Loading dev translate batches')
-            src_batches, sorted_idxs = self.get_translate_batches(src_file, batch_size=batch_size)
+            src_batches, sorted_idxs = self.get_translate_batches(pair, ac.DEV, batch_size=batch_size)
             self.translate_data[pair] = {
                 'src_batches': src_batches,
                 'sorted_idxs': sorted_idxs,
-                'ref_file': ref_file
             }
 
     def get_batch(self):
@@ -79,16 +69,14 @@ class DataManager(object):
             'logit_mask': self.logit_masks[tgt_lang]
         }
 
-    def get_translate_batches(self, src_file, batch_size=4096):
+    def get_translate_batches(self, pair, mode, input_file=None, batch_size=4096):
         data = []
         lens = []
-        with open(src_file, 'r') as fin:
-            for line in fin:
-                toks = line.strip().split()
-                if toks:
-                    ids = [self.vocab.get(tok, ac.UNK_ID) for tok in toks] + [ac.EOS_ID]
-                    data.append(ids)
-                    lens.append(len(ids))
+        raw_data = self.io.load_bpe_data(pair, mode, src=True, input_file=input_file)
+        for tokenized_line in raw_data:
+            ids = [self.vocab.get(tok, ac.UNK_ID) for tok in tokenized_line] + [ac.EOS_ID]
+            data.append(ids)
+            lens.append(len(ids))
 
         lens = np.array(lens)
         data = np.array(data)

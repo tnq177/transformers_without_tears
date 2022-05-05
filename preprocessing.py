@@ -5,11 +5,9 @@ from collections import Counter
 import subprocess
 import numpy as np
 import all_constants as ac
-import utils as ut
 
 np.random.seed(ac.SEED)
 random.seed(ac.SEED)
-
 
 def get_parser():
     parser = argparse.ArgumentParser()
@@ -175,7 +173,9 @@ if __name__ == '__main__':
         for idx, key in enumerate(vocab_keys):
             fout.write('{} {} {}\n'.format(key, idx, joint_vocab.get(key, 0)))
 
-    joint_vocab, _ = ut.init_vocab(joint_vocab_file)
+    joint_vocab = {}
+    for idx, key in enumerate(vocab_keys):
+        joint_vocab[key] = idx
 
     # get logit mask for each language
     for lang in langs:
