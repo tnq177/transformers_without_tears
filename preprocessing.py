@@ -112,7 +112,7 @@ if __name__ == '__main__':
     open(code_file, 'w').close()
     num_ops = args.num_ops
     fast = args.fast
-    command = f'{fast} learnbpe {num_ops} {joint_all_file} > {code_file}')
+    command = f'{fast} learnbpe {num_ops} {joint_all_file} > {code_file}'
     print(command)
     subprocess.check_call(command, shell=True)
 

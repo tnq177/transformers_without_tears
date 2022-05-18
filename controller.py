@@ -81,7 +81,7 @@ class Controller(object):
         self.logger.info('All pairs avg BLEUs:')
         self.logger.info(self.stats['avg_bleus'])
         for pair in self.pairs:
-            self.logger.info(f'{pair.upper()}:')
+            self.logger.info('{}:'.format(pair.upper()))
             self.logger.info('--> train_smppls: {}'.format(','.join(map(str, self.stats[pair]['train_smppls']))))
             self.logger.info('--> train_ppls:   {}'.format(','.join(map(str, self.stats[pair]['train_smppls']))))
             self.logger.info('--> dev_smppls:   {}'.format(','.join(map(str, self.stats[pair]['dev_smppls']))))
@@ -157,7 +157,7 @@ class Controller(object):
             speed = self.stats['words'] / self.stats['time']
             gnorm = self.stats['gnorms'][-1]
             self.logger.info(f'    lr = {self.lr:1.2e}')
-            self.logger.info(f'    gnorm = {self.stats['gnorms'][-1]:.2f}')
+            self.logger.info(f'    gnorm = {self.stats["gnorms"][-1]:.2f}')
             self.logger.info(f'    wps = {speed:.2f}')
 
             # per pair
