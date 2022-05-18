@@ -72,7 +72,7 @@ class Controller(object):
                 # with warmup
                 cond = self.stats['step'] > self.warmup_steps and self.lr < self.stop_lr
             if cond:
-                self.logger.info('lr = {0:1.2e} <= stop_lr = {0:1.2e}. Stop training.'.format(self.lr, self.stop_lr))
+                self.logger.info(f'lr = {self.lr:1.2e} <= stop_lr = {self.stop_lr:1.2e}. Stop training.')
                 break
 
         self.logger.info('XONGGGGGGG!!! FINISHEDDDD!!!')
@@ -81,7 +81,7 @@ class Controller(object):
         self.logger.info('All pairs avg BLEUs:')
         self.logger.info(self.stats['avg_bleus'])
         for pair in self.pairs:
-            self.logger.info('{}:'.format(pair.upper()))
+            self.logger.info(f'{pair.upper()}:')
             self.logger.info('--> train_smppls: {}'.format(','.join(map(str, self.stats[pair]['train_smppls']))))
             self.logger.info('--> train_ppls:   {}'.format(','.join(map(str, self.stats[pair]['train_smppls']))))
             self.logger.info('--> dev_smppls:   {}'.format(','.join(map(str, self.stats[pair]['dev_smppls']))))
@@ -152,13 +152,13 @@ class Controller(object):
 
         # write to logger every now and then
         if batch_num % self.log_freq == 0:
-            self.logger.info('Batch {}/{}, epoch {}/{}'.format(batch_num, self.epoch_size, epoch_num, self.max_epochs))
+            self.logger.info(f'Batch {batch_num}/{self.epoch_size}, epoch {epoch_num}/{self.max_epochs}')
 
             speed = self.stats['words'] / self.stats['time']
             gnorm = self.stats['gnorms'][-1]
-            self.logger.info('    lr = {0:1.2e}'.format(self.lr))
-            self.logger.info('    gnorm = {:.2f}'.format(self.stats['gnorms'][-1]))
-            self.logger.info('    wps = {:.2f}'.format(speed))
+            self.logger.info(f'    lr = {self.lr:1.2e}')
+            self.logger.info(f'    gnorm = {self.stats['gnorms'][-1]:.2f}')
+            self.logger.info(f'    wps = {speed:.2f}')
 
             # per pair
             for pair in self.pairs:
@@ -169,7 +169,7 @@ class Controller(object):
                 smppl = np.exp(smppl) if smppl < 300 else 1e9
                 ppl = self.stats[pair]['log_nll_loss'] / self.stats[pair]['log_weight']
                 ppl = np.exp(ppl) if ppl < 300 else 1e9
-                self.logger.info('    {}: smppl = {:.3f}, ppl = {:.3f}'.format(pair, smppl, ppl))
+                self.logger.info(f'    {pair}: smppl = {smppl:.3f}, ppl = {ppl:.3f}')
 
                 self.stats[pair]['log_loss'] = 0.
                 self.stats[pair]['log_nll_loss'] = 0.
@@ -192,12 +192,12 @@ class Controller(object):
             p['lr'] = self.lr
 
     def report_epoch(self, epoch_num):
-        self.logger.info('Finish epoch {}'.format(epoch_num))
+        self.logger.info(f'Finish epoch {epoch_num}')
 
         speed = self.stats['words'] / self.stats['time']
         self.stats['words'] = 0.
         self.stats['time'] = 0.
-        self.logger.info('    wps = {:.2f}'.format(speed))
+        self.logger.info(f'    wps = {speed:.2f}')
 
         for pair in self.pairs:
             if self.stats[pair]['epoch_weight'] <= 0:
@@ -214,7 +214,7 @@ class Controller(object):
             self.stats[pair]['epoch_loss'] = 0.
             self.stats[pair]['epoch_nll_loss'] = 0.
             self.stats[pair]['epoch_weight'] = 0.
-            self.logger.info('    {}: train_smppl={:.3f}, train_ppl={:.3f}'.format(pair, smppl, ppl))
+            self.logger.info(f'    {pair}: train_smppl={smppl:.3f}, train_ppl={ppl:.3f}')
 
     def eval_and_decay(self):
         self.eval_ppl()
@@ -240,8 +240,8 @@ class Controller(object):
             past_bleus = self.stats['avg_bleus'][-1 - self.patience:]
             past_bleus = map(str, past_bleus)
             past_bleus = ','.join(past_bleus)
-            self.logger.info('Past BLEUs are {}'.format(past_bleus))
-            self.logger.info('Anneal lr from {} to {}'.format(self.lr, self.lr * self.lr_decay))
+            self.logger.info(f'Past BLEUs are {past_bleus}')
+            self.logger.info(f'Anneal lr from {self.lr} to {self.lr * self.lr_decay}')
             self.lr = self.lr * self.lr_decay
             for p in self.optimizer.param_groups:
                 p['lr'] = self.lr
@@ -278,9 +278,9 @@ class Controller(object):
                 ppl = np.exp(ppl) if ppl < 300 else 1e9
                 self.stats[pair]['dev_smppls'].append(smppl)
                 self.stats[pair]['dev_ppls'].append(ppl)
-                self.logger.info('    {}: dev_smppl={:.3f}, dev_ppl={:.3f}'.format(pair, smppl, ppl))
+                self.logger.info(f'    {pair}: dev_smppl={smppl:.3f}, dev_ppl={ppl:.3f}')
 
-        self.logger.info('It takes {} seconds'.format(int(time.time() - start)))
+        self.logger.info(f'It takes {int(time.time() - start)} seconds')
         self.model.train()
 
     def eval_bleu(self):
@@ -290,7 +290,7 @@ class Controller(object):
         avg_bleus = []
         with torch.no_grad():
             for pair in self.pairs:
-                self.logger.info('--> {}'.format(pair))
+                self.logger.info(f'--> {pair}')
                 all_best_trans, all_beam_trans = self.translate(pair, ac.DEV)
                 bleu = self.io.print_dev_translations_and_calculate_BLEU(pair, all_best_trans, all_beam_trans)
                 avg_bleus.append(bleu)
@@ -298,8 +298,8 @@ class Controller(object):
         avg_bleu = sum(avg_bleus) / len(avg_bleus)
         self.io.save_avg_bleu_score(avg_bleu)
         self.stats['avg_bleus'].append(avg_bleu)
-        self.logger.info('avg_bleu = {}'.format(avg_bleu))
-        self.logger.info('Done evaluating dev BLEU, it takes {} seconds'.format(ut.format_seconds(time.time() - start)))
+        self.logger.info(f'avg_bleu = {avg_bleu}')
+        self.logger.info(f'Done evaluating dev BLEU, it takes {ut.format_seconds(time.time() - start)} seconds')
 
     def get_trans(self, probs, scores, symbols):
         def ids_to_trans(trans_ids):
@@ -346,7 +346,7 @@ class Controller(object):
 
                     count += 1
                     if count % 100 == 0:
-                        self.logger.info('   Translaing line {}, avg {:.2f} sents/second'.format(count, count / (time.time() - start)))
+                        self.logger.info(f'   Translating line {count}, avg {count / (time.time() - start):.2f} sents/second')
 
         self.model.train()
 

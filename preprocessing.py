@@ -42,13 +42,13 @@ if __name__ == '__main__':
     open(lang_vocab_file, 'w').close()
     with open(lang_vocab_file, 'w') as fout:
         for idx, lang in enumerate(langs):
-            fout.write('{} {}\n'.format(lang, idx))
+            fout.write(f'{lang} {idx}\n')
 
     # group sentences in training data by languages instead of pairs
     datas = {lang: [] for lang in langs}
     for pair in pairs:
         for lang in pair.split('2'):
-            infile = join(data_dir, '{}/train.{}'.format(pair, lang))
+            infile = join(data_dir, f'{pair}/train.{lang}')
             with open(infile, 'r') as fin:
                 datas[lang].extend(fin.readlines())
 
@@ -63,9 +63,9 @@ if __name__ == '__main__':
     ps = ns / sum_ns
     ps = ps ** args.alpha
     ps = ps / sum(ps)
-    print('Alpha = {}'.format(args.alpha))
+    print(f'Alpha = {args.alpha}')
     for idx, lang in enumerate(langs):
-        print('{}: n={}, p={}'.format(lang, len(datas[lang]), ps[idx]))
+        print(f'{lang}: n={len(datas[lang])}, p={ps[idx]}')
 
     """
     Following https://arxiv.org/pdf/1901.07291.pdf, instead of concat all training data
@@ -83,12 +83,12 @@ if __name__ == '__main__':
     subjoint_files = {}
     subjoint_fouts = {}
     for lang in langs:
-        subjoint_files[lang] = join(data_dir, 'subjoint_{}.txt'.format(lang))
+        subjoint_files[lang] = join(data_dir, f'subjoint_{lang}.txt')
         open(subjoint_files[lang], 'w').close()
         subjoint_fouts[lang] = open(subjoint_files[lang], 'w')
 
     iters = [0] * len(langs)
-    print('Sample {} sentences from all training data'.format(sum_ns))
+    print(f'Sample {sum_ns} sentences from all training data')
     with open(joint_all_file, 'w') as fout:
         for _ in range(sum_ns):
             lang_idx = np.random.choice(range(len(langs)), p=ps)
@@ -100,7 +100,7 @@ if __name__ == '__main__':
 
             iters[lang_idx] = (idx + 1) % len(datas[lang])
             if iters[lang_idx] == 0:
-                print('re-shuffle {}'.format(lang))
+                print(f're-shuffle {lang}')
                 random.shuffle(datas[lang])
 
     for lang in langs:
@@ -112,7 +112,7 @@ if __name__ == '__main__':
     open(code_file, 'w').close()
     num_ops = args.num_ops
     fast = args.fast
-    command = '{} learnbpe {} {} > {}'.format(fast, num_ops, joint_all_file, code_file)
+    command = f'{fast} learnbpe {num_ops} {joint_all_file} > {code_file}')
     print(command)
     subprocess.check_call(command, shell=True)
 
@@ -120,13 +120,13 @@ if __name__ == '__main__':
     print('Extract BPE vocabs')
     bpe_vocab_files = {}
     for lang in langs:
-        encoded_file = '{}.{}'.format(subjoint_files[lang], num_ops)
-        command = '{} applybpe {} {} {}'.format(fast, encoded_file, subjoint_files[lang], code_file)
+        encoded_file = f'{subjoint_files[lang]}.{num_ops}'
+        command = f'{fast} applybpe {encoded_file} {subjoint_files[lang]} {code_file}'
         print(command)
         subprocess.check_call(command, shell=True)
 
-        bpe_vocab_file = '{}.vocab'.format(encoded_file)
-        command = '{} getvocab {} > {}'.format(fast, encoded_file, bpe_vocab_file)
+        bpe_vocab_file = f'{encoded_file}.vocab'
+        command = f'{fast} getvocab {encoded_file} > {bpe_vocab_file}'
         print(command)
         subprocess.check_call(command, shell=True)
         bpe_vocab_files[lang] = bpe_vocab_file
@@ -137,9 +137,9 @@ if __name__ == '__main__':
         for lang in pair.split('2'):
             bpe_vocab_file = bpe_vocab_files[lang]
             for mode in [ac.TRAIN, ac.DEV, ac.TEST]:
-                infile = join(data_dir, '{}/{}.{}'.format(pair, mode, lang))
-                encoded_file = '{}.bpe'.format(infile)
-                command = '{} applybpe {} {} {} {}'.format(fast, encoded_file, infile, code_file, bpe_vocab_file)
+                infile = join(data_dir, f'{pair}/{mode}.{lang}')
+                encoded_file = f'{infile}.bpe'
+                command = f'{fast} applybpe {encoded_file} {infile} {code_file} {bpe_vocab_file}'
                 print(command)
                 subprocess.check_call(command, shell=True)
 
@@ -150,7 +150,7 @@ if __name__ == '__main__':
     sub_vocabs = {lang: Counter() for lang in langs}
     for pair in pairs:
         for lang in pair.split('2'):
-            infile = join(data_dir, '{}/train.{}.bpe'.format(pair, lang))
+            infile = join(data_dir, f'{pair}/train.{lang}.bpe')
             with open(infile, 'r') as fin:
                 for line in fin:
                     toks = line.strip().split()
@@ -164,14 +164,14 @@ if __name__ == '__main__':
     vocab_keys = start_vocab + sorted_keys
     max_vocab_size = args.max_vocab_size
     if 0 < max_vocab_size < len(vocab_keys):
-        print('Cut off vocab to top {} types'.format(max_vocab_size))
+        print(f'Cut off vocab to top {max_vocab_size} types')
         vocab_keys = vocab_keys[:max_vocab_size]
 
     joint_vocab_file = join(data_dir, 'vocab.joint')
     open(joint_vocab_file, 'w').close()
     with open(joint_vocab_file, 'w') as fout:
         for idx, key in enumerate(vocab_keys):
-            fout.write('{} {} {}\n'.format(key, idx, joint_vocab.get(key, 0)))
+            fout.write(f'{key} {idx} {joint_vocab.get(key, 0)}\n')
 
     joint_vocab = {}
     for idx, key in enumerate(vocab_keys):
@@ -186,7 +186,7 @@ if __name__ == '__main__':
         for key in sub_vocabs[lang]:
             mask[joint_vocab.get(key, ac.UNK_ID)] = 1
 
-        mask_file = join(data_dir, 'mask.{}.npy'.format(lang))
+        mask_file = join(data_dir, f'mask.{lang}.npy')
         np.save(mask_file, mask, allow_pickle=True)
 
     # save all training data as npy files
@@ -196,8 +196,8 @@ if __name__ == '__main__':
             src_data = []
             tgt_data = []
             src_lang, tgt_lang = pair.split('2')
-            src_infile = join(data_dir, '{}/{}.{}.bpe'.format(pair, mode, src_lang))
-            tgt_infile = join(data_dir, '{}/{}.{}.bpe'.format(pair, mode, tgt_lang))
+            src_infile = join(data_dir, f'{pair}/{mode}.{src_lang}.bpe')
+            tgt_infile = join(data_dir, f'{pair}/{mode}.{tgt_lang}.bpe')
             with open(src_infile, 'r') as f_src, open(tgt_infile, 'r') as f_tgt:
                 for src_line, tgt_line in zip(f_src, f_tgt):
                     src_toks = src_line.strip().split()
@@ -211,7 +211,7 @@ if __name__ == '__main__':
 
             src_data = np.array(src_data)
             tgt_data = np.array(tgt_data)
-            src_npy_file = join(data_dir, '{}/{}.{}.npy'.format(pair, mode, src_lang))
-            tgt_npy_file = join(data_dir, '{}/{}.{}.npy'.format(pair, mode, tgt_lang))
+            src_npy_file = join(data_dir, f'{pair}/{mode}.{src_lang}.npy')
+            tgt_npy_file = join(data_dir, f'{pair}/{mode}.{tgt_lang}.npy')
             np.save(src_npy_file, src_data, allow_pickle=True)
             np.save(tgt_npy_file, tgt_data, allow_pickle=True)

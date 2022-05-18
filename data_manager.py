@@ -23,7 +23,7 @@ class DataManager(object):
             for mode in [ac.TRAIN, ac.DEV]:
                 src = self.io.load_npy_data(pair, mode, src=True)
                 tgt = self.io.load_npy_data(pair, mode, src=False)
-                self.args.logger.info('Loading {}-{}'.format(pair, mode))
+                self.args.logger.info(f'Loading {pair}-{mode}')
                 self.data[pair][mode] = NMTDataset(src, tgt, batch_size)
 
         # batch sampling similar to in preprocessing.py
@@ -34,7 +34,7 @@ class DataManager(object):
         self.ps = ps
         self.args.logger.info('Sampling batches with probs:')
         for idx, pair in enumerate(self.pairs):
-            self.args.logger.info('{}, n={}, p={}'.format(pair, ns[idx], ps[idx]))
+            self.args.logger.info(f'{pair}, n={ns[idx]}, p={ps[idx]}')
 
         self.train_iters = {}
         for pair in self.pairs:

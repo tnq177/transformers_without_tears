@@ -195,7 +195,7 @@ class IO(object):
     def _remove_ckpt(self, pair, score):
         ckpt_path = self._construct_ckpt_path(pair, score)
         if exists(ckpt_path):
-            self.logger.info('rm {}'.format(ckpt_path))
+            self.logger.info(f'rm {ckpt_path}')
             os.remove(ckpt_path)
 
     def load_best_ckpt(self, pair):
@@ -240,7 +240,7 @@ class IO(object):
 
     def _remove_bpe(self, infile, outfile):
         open(outfile, 'w').close()
-        Popen("sed -r 's/(@@ )|(@@ ?$)//g' < {} > {}".format(infile, outfile), shell=True, stdout=PIPE).communicate()
+        Popen(f"sed -r 's/(@@ )|(@@ ?$)//g' < {infile} > {outfile}", shell=True, stdout=PIPE).communicate()
 
     def _calc_bleu(self, trans_file, ref_file):
         # compute BLEU
@@ -300,6 +300,6 @@ class IO(object):
         self._print_best_trans(pair, best_trans, best_trans_file)
         self._print_beam_trans(pair, beam_trans, beam_trans_file)
 
-        self.logger.info('Finish decode {}'.format(src_file))
-        self.logger.info('Best --> {}'.format(best_trans_file))
-        self.logger.info('Beam --> {}'.format(beam_trans_file))
+        self.logger.info(f'Finish decode {src_file}')
+        self.logger.info(f'Best --> {best_trans_file}')
+        self.logger.info(f'Beam --> {beam_trans_file}')

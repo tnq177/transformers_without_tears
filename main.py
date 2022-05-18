@@ -67,7 +67,7 @@ if __name__ == '__main__':
     # TODO: nicer formatting?
     logger.info(model)
     param_count = sum([np.prod(p.size()) for p in model.parameters()])
-    logger.info('Model has {:,} parameters'.format(param_count))
+    logger.info(f'Model has {param_count:,} parameters')
 
     # controller
     data_manager = DataManager(args, io)
