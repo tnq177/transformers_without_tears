@@ -35,8 +35,7 @@ class IO(object):
         self.data_files = self._construct_data_filenames()
         
         # dump files
-        dump_dir = args.dump_dir
-        Popen('mkdir -p %s' % dump_dir, shell=True).wait()
+        Popen('mkdir -p %s' % self.dump_dir, shell=True).wait()
         
         self.logfile          = join(self.dump_dir, 'DEBUG.log')
         self.train_stats_file = join(self.dump_dir, 'train_stats.pkl')
@@ -47,8 +46,8 @@ class IO(object):
         self.dev_bleus['all'] = []
         
     def _construct_data_filenames(self):
-        raw_dir = self.raw_data_dir
-        proc_dir = self.processed_data_dir
+        raw_dir = self.raw_dir
+        proc_dir = self.proc_dir
         data_files = {}
 
         for lang in self.langs:
@@ -106,14 +105,20 @@ class IO(object):
         return trans_path
     
     def _construct_test_trans_path(self, pair, best, input_file):
-        src_file = input_file if input_file else self.data_files[pair][ac.TEST]['src_bpe']
-        src_lang = pair.split('2')[0]
-        if best:
-            output_file = join(dump_dir, f'{pair}/{ac.TEST}.{src_lang}.best_trans')
+        if input_file:
+            src_file = input_file
+            if best:
+                output_file = src_file + '.best_trans'
+            else:
+                output_file = src_file + '.beam_trans'
         else:
-            output_file = join(dump_dir, f'{pair}/{ac.TEST}.{src_lang}.beam_trans')
-        else:
-            return src_file, output_file
+            src_file = self.data_files[pair][ac.TEST]['src_bpe']
+            dump_dir = self.dump_dir
+            if best:
+                output_file = join(dump_dir, f'{ac.TEST}.{pair}.bpe.best_trans')
+            else:
+                output_file = join(dump_dir, f'{ac.TEST}.{pair}.bpe.beam_trans')
+        return src_file, output_file
 
     def get_logger(self):
         """Global logger for every logging"""

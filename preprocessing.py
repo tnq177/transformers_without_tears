@@ -44,6 +44,11 @@ if __name__ == '__main__':
     proc_dir = args.processed_data_dir
     if not exists(proc_dir):
         makedirs(proc_dir)
+    for pair in pairs:
+        subdir = join(proc_dir, pair)
+        if not exists(subdir):
+            makedirs(subdir)
+        
 
     lang_vocab_file = join(proc_dir, 'lang.vocab')
     joint_vocab_file = join(proc_dir, 'vocab.joint')
@@ -62,6 +67,8 @@ if __name__ == '__main__':
                 bpe_files[(pair, lang, mode)] = join(proc_dir, f'{pair}/{mode}.{lang}.bpe')
                 npy_files[(pair, lang, mode)] = join(proc_dir, f'{pair}/{mode}.{lang}.npy')
     
+    num_ops = args.num_ops
+    fast = args.fast
     joint_all_file = join(proc_dir, 'joint_all.txt')
     code_file = join(proc_dir, 'joint.bpe')
     subjoint_files = {}
@@ -140,7 +147,6 @@ if __name__ == '__main__':
     print('Finish sampling')
     print('Learn BPE')
     open(code_file, 'w').close()
-    num_ops = args.num_ops
     fast = args.fast
     command = f'{fast} learnbpe {num_ops} {joint_all_file} > {code_file}'
     print(command)
