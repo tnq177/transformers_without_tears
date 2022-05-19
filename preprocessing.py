@@ -1,6 +1,7 @@
 import argparse
 import random
-from os.path import join
+from os import makedirs
+from os.path import join, exists
 from collections import Counter
 import subprocess
 import numpy as np
@@ -41,6 +42,8 @@ if __name__ == '__main__':
     # all hardcoded filenames
     raw_dir = args.raw_data_dir
     proc_dir = args.processed_data_dir
+    if not exists(proc_dir):
+        makedirs(proc_dir)
 
     lang_vocab_file = join(proc_dir, 'lang.vocab')
     joint_vocab_file = join(proc_dir, 'vocab.joint')

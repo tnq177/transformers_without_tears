@@ -19,8 +19,10 @@ def get_parser():
                         help='Used if do translate, format {file_path,src_lang,tgt_lang...}. e.g.: data/test.en,en,vi data/test.vi,vi,en')
     parser.add_argument('--model-file', type=str,
                         help='Used if do translate, path to checkpoint')
-    parser.add_argument('--data-dir', type=str, required=True,
-                        help='Path to data directory')
+    parser.add_argument('--raw-data-dir', type=str, required=True,
+                        help='Path to original data directory')
+    parser.add_argument('--processed-data-dir', type=str, required=True,
+                        help='Path to preprocessed data directory')
     parser.add_argument('--dump-dir', type=str, required=True,
                         help='Path to dump directory (store all stats, translations, checkpoints...)')
     parser.add_argument('--pairs', type=str, required=True,
@@ -33,7 +35,6 @@ def get_parser():
                         help='Model and training configuration, see configurations.py')
     parser.add_argument('--fix-random-seed', action='store_true',
                         help='Use a fixed random seed, for reproducibility')
-
     return parser
 
 

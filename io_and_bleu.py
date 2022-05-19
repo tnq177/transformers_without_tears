@@ -12,15 +12,16 @@ import all_constants as ac
 
 class IO(object):
     def __init__(self, args):
-        self.data_dir = args.data_dir
+        self.raw_dir = args.raw_data_dir
+        self.proc_dir = args.processed_data_dir
         self.dump_dir = args.dump_dir
         self.bleu_script = args.bleu_script
         if not exists(args.bleu_script):
             raise ValueError(f'Bleu script not found at {self.bleu_script}')
         
         # vocab files
-        self.vocab_file      = join(self.data_dir, 'vocab.joint')
-        self.lang_vocab_file = join(self.data_dir, 'lang.vocab')
+        self.vocab_file      = join(self.proc_dir, 'vocab.joint')
+        self.lang_vocab_file = join(self.proc_dir, 'lang.vocab')
         if not exists(self.vocab_file):
             raise ValueError(f'Vocab file not found at {self.vocab_file}')
         if not exists(self.lang_vocab_file):
@@ -46,12 +47,13 @@ class IO(object):
         self.dev_bleus['all'] = []
         
     def _construct_data_filenames(self):
-        data_dir = self.data_dir
+        raw_dir = self.raw_data_dir
+        proc_dir = self.processed_data_dir
         data_files = {}
 
         for lang in self.langs:
             data_files[lang] = {}
-            mask_file = join(data_dir, f'mask.{lang}.npy')
+            mask_file = join(proc_dir, f'mask.{lang}.npy')
             if not exists(mask_file):
                 raise ValueError(f'Mask file for {lang} not found at {mask_file}')
             data_files[lang]['mask'] = mask_file
@@ -61,13 +63,13 @@ class IO(object):
             data_files[pair] = {}
             for mode in [ac.TRAIN, ac.DEV, ac.TEST]:
                 data_files[pair][mode] = {}
-                data_files[pair][mode]['src_orig'] = join(data_dir, f'{pair}/{mode}.{src_lang}')
-                data_files[pair][mode]['tgt_orig'] = join(data_dir, f'{pair}/{mode}.{tgt_lang}')
-                data_files[pair][mode]['src_bpe'] = join(data_dir, f'{pair}/{mode}.{src_lang}.bpe')
-                data_files[pair][mode]['tgt_bpe'] = join(data_dir, f'{pair}/{mode}.{tgt_lang}.bpe')
+                data_files[pair][mode]['src_orig'] = join(raw_dir, f'{pair}/{mode}.{src_lang}')
+                data_files[pair][mode]['tgt_orig'] = join(raw_dir, f'{pair}/{mode}.{tgt_lang}')
+                data_files[pair][mode]['src_bpe'] = join(proc_dir, f'{pair}/{mode}.{src_lang}.bpe')
+                data_files[pair][mode]['tgt_bpe'] = join(proc_dir, f'{pair}/{mode}.{tgt_lang}.bpe')
                 if mode != ac.TEST:
-                    data_files[pair][mode]['src_npy'] = join(data_dir, f'{pair}/{mode}.{src_lang}.npy')
-                    data_files[pair][mode]['tgt_npy'] = join(data_dir, f'{pair}/{mode}.{tgt_lang}.npy')
+                    data_files[pair][mode]['src_npy'] = join(proc_dir, f'{pair}/{mode}.{src_lang}.npy')
+                    data_files[pair][mode]['tgt_npy'] = join(proc_dir, f'{pair}/{mode}.{tgt_lang}.npy')
                 for key in data_files[pair][mode]:
                     filename = data_files[pair][mode][key]
                     if not exists(filename):
@@ -105,10 +107,13 @@ class IO(object):
     
     def _construct_test_trans_path(self, pair, best, input_file):
         src_file = input_file if input_file else self.data_files[pair][ac.TEST]['src_bpe']
+        src_lang = pair.split('2')[0]
         if best:
-            return src_file, src_file + '.best_trans'
+            output_file = join(dump_dir, f'{pair}/{ac.TEST}.{src_lang}.best_trans')
         else:
-            return src_file, src_file + '.beam_trans'
+            output_file = join(dump_dir, f'{pair}/{ac.TEST}.{src_lang}.beam_trans')
+        else:
+            return src_file, output_file
 
     def get_logger(self):
         """Global logger for every logging"""
