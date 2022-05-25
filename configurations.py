@@ -38,6 +38,9 @@ def base():
     # Decoding
     config['beam_size'] = 4
     config['beam_alpha'] = 0.6
+    config['use_rel_max_len'] = True
+    config['rel_max_len'] = 50
+    config['abs_max_len'] = 300
 
     return config
 
