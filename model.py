@@ -118,7 +118,8 @@ class Transformer(nn.Module):
 
     def beam_decode(self, src, src_lang_idx, tgt_lang_idx, logit_mask):
         embed_dim = self.args.embed_dim
-        max_len = src.size(1) + 51
+        max_len = src.size(1) + self.args.rel_max_len + 1 if self.args.use_rel_max_len else self.args.abs_max_len + 1
+        max_len = max(max_len, src.size(1))
         pos_embedding = ut.get_positional_encoding(embed_dim, max_len)
         word_embedding = F.normalize(self.word_embedding, dim=-1) if self.args.fix_norm else self.word_embedding
         logit_mask = logit_mask == 1 if self.logit_mask is None else self.logit_mask
@@ -137,6 +138,8 @@ class Transformer(nn.Module):
             logits = self.logit_fn(decoder_output, word_embedding, logit_mask)
             return F.log_softmax(logits, dim=-1)
 
-        # following Attention is all you need, we decode up to src_len + 50 tokens only
-        max_lengths = torch.sum(src != ac.PAD_ID, dim=-1).type(src.type()) + 50
+        if self.args.use_rel_max_len:
+            max_lengths = torch.sum(src != ac.PAD_ID, dim=-1).type(src.type()) + self.args.rel_max_len
+        else:
+            max_lengths = torch.tensor([self.args.abs_max_len] * src.size(0)).type(src.type())
         return self.decoder.beam_decode(encoder_outputs, encoder_mask, get_tgt_inp, logprob_fn, ac.BOS_ID, ac.EOS_ID, max_lengths, beam_size=self.args.beam_size, alpha=self.args.beam_alpha)
