@@ -26,8 +26,8 @@ def get_parser():
                         help='maximum vocab size')
     parser.add_argument('--joint', choices=('True','False'), default='True',
                         help='whether to perform joint or separate BPE')
-    parser.add_argument('--resampling', choices=('True','False'), default='True',
-                        help='whether to resample training data so all languages are equally represented')
+    parser.add_argument('--oversampling', choices=('True','False'), default='True',
+                        help='whether to oversample training data so all languages are more fairly represented')
     parser.add_argument('--alpha', type=float, default=0.5,
                         help='oversampling prob when learning bpe, see https://arxiv.org/pdf/1901.07291.pdf')
     return parser
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     # get args
     args = get_parser().parse_args()
     joint = (args.joint == 'True')
-    resampling = (args.resampling == 'True')
+    oversampling = (args.oversampling == 'True')
     alpha = args.alpha
     fast = args.fast
     max_vocab_size = args.max_vocab_size
@@ -131,9 +131,9 @@ if __name__ == '__main__':
         open(subjoint_files[lang], 'w').close()
         subjoint_fouts[lang] = open(subjoint_files[lang], 'w')
 
-    # if desired, do resampling
-    if joint and resampling:
-        print('Beginning resampling')
+    # if desired, do oversampling
+    if joint and oversampling:
+        print('Beginning oversampling')
 
         # shuffle training data before sampling
         for lang in langs:
@@ -175,7 +175,7 @@ if __name__ == '__main__':
             if iters[lang_idx] == 0:
                 print(f're-shuffle {lang}')
                 random.shuffle(datas[lang])
-        print('Finish resampling')
+        print('Finish oversampling')
 
     # otherwise just write the data to files by language
     else:

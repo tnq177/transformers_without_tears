@@ -88,14 +88,6 @@ class Controller(object):
             self.logger.info('--> dev_ppls:     {}'.format(','.join(map(str, self.stats[pair]['dev_ppls']))))
             self.logger.info('--> dev_bleus:    {}'.format(','.join(map(str, self.stats[pair]['dev_bleus']))))
 
-        # translate test
-        self.logger.info('Translating test file')
-        for pair in self.pairs:
-            # Load best ckpt
-            self.model.load_state_dict(self.io.load_best_ckpt(pair))
-            all_best_trans, all_beam_trans = self.translate(pair, ac.TEST)
-            self.io.print_test_translations(pair, all_best_trans, all_beam_trans)
-
     def run_log(self, batch_num, epoch_num):
         start = time.time()
 
