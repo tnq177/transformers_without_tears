@@ -1,7 +1,7 @@
 import re
 import logging
 import os
-from os.path import join, exists
+from os.path import join, exists, basename
 from subprocess import Popen, PIPE
 import shutil
 import pickle
@@ -36,8 +36,16 @@ class IO(object):
         
         # dump files
         Popen('mkdir -p %s' % self.dump_dir, shell=True).wait()
-        
-        self.logfile          = join(self.dump_dir, 'DEBUG.log')
+
+        # translate files
+        if args.mode == 'train_and_translate' or args.mode == 'translate':
+            self.trans_dir = args.translate_dir
+            Popen('mkdir -p %s' % self.trans_dir, shell=True).wait()
+
+        if args.mode == 'train' or args.mode == 'train_and_translate':
+            self.logfile = join(self.dump_dir, 'DEBUG.log')
+        else:
+            self.logfile = join(self.trans_dir, 'DEBUG.log')
         self.train_stats_file = join(self.dump_dir, 'train_stats.pkl')
         
         self.dev_bleus = {}
@@ -92,32 +100,32 @@ class IO(object):
         dump_dir = self.dump_dir
         if bpe:
             if best:
-                trans_path = join(dump_dir, f'{pair}_val_trans.txt.bpe')
+                trans_path = join(dump_dir, f'{pair}_best_trans.txt.bpe')
             else:
                 trans_path = join(dump_dir, f'{pair}_beam_trans.txt.bpe')
         else:
             if best:
-                trans_path = join(dump_dir, f'{pair}_val_trans.txt')
+                trans_path = join(dump_dir, f'{pair}_best_trans.txt')
             else:
                 trans_path = join(dump_dir, f'{pair}_beam_trans.txt')
         if score is not None:
             trans_path += f'-{score}'
         return trans_path
     
-    def _construct_test_trans_path(self, pair, best, input_file):
+    def _construct_test_trans_path(self, pair, best, input_file, output_file):
+        trans_dir = self.trans_dir
         if input_file:
             src_file = input_file
             if best:
-                output_file = src_file + '.best_trans'
+                output_file = join(trans_dir, output_file + '.best_trans')
             else:
-                output_file = src_file + '.beam_trans'
+                output_file = join(trans_dir, output_file + '.beam_trans')
         else:
             src_file = self.data_files[pair][ac.TEST]['src_bpe']
-            dump_dir = self.dump_dir
             if best:
-                output_file = join(dump_dir, f'{ac.TEST}.{pair}.bpe.best_trans')
+                output_file = join(trans_dir, f'{ac.TEST}.{pair}.bpe.best_trans')
             else:
-                output_file = join(dump_dir, f'{ac.TEST}.{pair}.bpe.beam_trans')
+                output_file = join(trans_dir, f'{ac.TEST}.{pair}.bpe.beam_trans')
         return src_file, output_file
 
     def get_logger(self):
@@ -303,13 +311,13 @@ class IO(object):
     def save_avg_bleu_score(self, score):
         self.dev_bleus['all'].append(score)
 
-    def print_test_translations(self, pair, best_trans, beam_trans, input_file=None):
-        src_file, best_trans_file = self._construct_test_trans_path(pair, best=True, input_file=input_file)
-        src_file, beam_trans_file = self._construct_test_trans_path(pair, best=False, input_file=input_file)
+    def print_test_translations(self, pair, best_trans, beam_trans, input_file=None, output_file=None):
+        src_file, best_trans_file = self._construct_test_trans_path(pair, best=True, input_file=input_file, output_file=output_file)
+        src_file, beam_trans_file = self._construct_test_trans_path(pair, best=False, input_file=input_file, output_file=output_file)
         
         self._print_best_trans(pair, best_trans, best_trans_file)
         self._print_beam_trans(pair, beam_trans, beam_trans_file)
 
-        self.logger.info(f'Finish decode {src_file}')
+        self.logger.info(f'Finish decoding {src_file}')
         self.logger.info(f'Best --> {best_trans_file}')
         self.logger.info(f'Beam --> {beam_trans_file}')
