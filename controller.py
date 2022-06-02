@@ -24,6 +24,7 @@ class Controller(object):
         # heuristic
         self.stop_lr = args.stop_lr
         self.patience = args.patience
+        self.eval_metric = args.eval_metric
         # others
         self.epoch_size = args.epoch_size
         self.max_epochs = args.max_epochs
@@ -37,6 +38,8 @@ class Controller(object):
         self.stats = {
             'words': 0.,
             'time': 0.,
+            'avg_smppls': [],
+            'avg_ppls': [],
             'avg_bleus': [],
             'gnorms': [],
             'step': 0.
@@ -78,6 +81,10 @@ class Controller(object):
         self.logger.info('XONGGGGGGG!!! FINISHEDDDD!!!')
         self.io.save_train_stats(self.stats)
 
+        self.logger.info('All pairs avg smppls:')
+        self.logger.info(self.stats['avg_smppls'])
+        self.logger.info('All pairs avg ppls:')
+        self.logger.info(self.stats['avg_ppls'])
         self.logger.info('All pairs avg BLEUs:')
         self.logger.info(self.stats['avg_bleus'])
         for pair in self.pairs:
@@ -226,13 +233,22 @@ class Controller(object):
         if self.lr_scheduler == ac.ORG_WU or self.lr_scheduler == ac.UPFLAT_WU and self.stats['step'] < self.warm_steps:
             return
 
-        # we decay learning rate wrt avg_bleu
-        cond = len(self.stats['avg_bleus']) > self.patience and self.stats['avg_bleus'][-1] < min(self.stats['avg_bleus'][-1 - self.patience: -1])
+        # we decay learning rate wrt avg_bleu (or a different evaluation metric)
+        if self.eval_metric == ac.DEV_BLEU:
+            stat = 'avg_bleus'
+            func = min
+        elif self.eval_metric == ac.DEV_PPL:
+            stat = 'avg_ppls'
+            func = max
+        else:
+            stat = 'avg_smppls'
+            func = max
+        cond = len(self.stats[stat]) > self.patience and self.stats[stat][-1] < func(self.stats[stat][-1 - self.patience: -1])
         if cond:
-            past_bleus = self.stats['avg_bleus'][-1 - self.patience:]
-            past_bleus = map(str, past_bleus)
-            past_bleus = ','.join(past_bleus)
-            self.logger.info(f'Past BLEUs are {past_bleus}')
+            past_stats = self.stats[stat][-1 - self.patience:]
+            past_stats = map(str, past_stats)
+            past_stats = ','.join(past_stats)
+            self.logger.info(f'Stat is {stat}, past numbers are {past_stats}')
             self.logger.info(f'Anneal lr from {self.lr} to {self.lr * self.lr_decay}')
             self.lr = self.lr * self.lr_decay
             for p in self.optimizer.param_groups:
@@ -243,6 +259,8 @@ class Controller(object):
         start = time.time()
         self.model.eval()
 
+        avg_smppls = []
+        avg_ppls = []
         with torch.no_grad():
             for pair in self.pairs:
                 src_lang, tgt_lang = pair.split('2')
@@ -268,11 +286,21 @@ class Controller(object):
                 smppl = np.exp(smppl) if smppl < 300 else 1e9
                 ppl = nll_loss / weight
                 ppl = np.exp(ppl) if ppl < 300 else 1e9
+                avg_smppls.append(smppl)
+                avg_ppls.append(ppl)
+                self.io.save_score(ac.DEV_SMPPL, smppl, pair)
+                self.io.save_score(ac.DEV_PPL, ppl, pair)
                 self.stats[pair]['dev_smppls'].append(smppl)
                 self.stats[pair]['dev_ppls'].append(ppl)
                 self.logger.info(f'    {pair}: dev_smppl={smppl:.3f}, dev_ppl={ppl:.3f}')
 
-        self.logger.info(f'It takes {int(time.time() - start)} seconds')
+        avg_smppl = sum(avg_smppls) / len(avg_smppls)
+        avg_ppl = sum(avg_ppls) / len(avg_ppls)
+        self.io.save_score(ac.DEV_SMPPL, avg_smppl)
+        self.io.save_score(ac.DEV_PPL, avg_ppl)
+        self.stats['avg_smppls'].append(avg_smppls)
+        self.stats['avg_ppls'].append(avg_ppl)
+        self.logger.info(f'Done evaluating dev ppl, it takes {int(time.time() - start)} seconds')
         self.model.train()
 
     def eval_bleu(self):
@@ -288,7 +316,7 @@ class Controller(object):
                 avg_bleus.append(bleu)
                 self.stats[pair]['dev_bleus'].append(bleu)
         avg_bleu = sum(avg_bleus) / len(avg_bleus)
-        self.io.save_avg_bleu_score(avg_bleu)
+        self.io.save_score(ac.DEV_BLEU, avg_bleu)
         self.stats['avg_bleus'].append(avg_bleu)
         self.logger.info(f'avg_bleu = {avg_bleu}')
         self.logger.info(f'Done evaluating dev BLEU, it takes {ut.format_seconds(time.time() - start)} seconds')

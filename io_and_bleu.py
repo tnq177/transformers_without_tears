@@ -47,11 +47,14 @@ class IO(object):
         else:
             self.logfile = join(self.trans_dir, 'DEBUG.log')
         self.train_stats_file = join(self.dump_dir, 'train_stats.pkl')
-        
-        self.dev_bleus = {}
-        for pair in self.pairs:
-            self.dev_bleus[pair] = []
-        self.dev_bleus['all'] = []
+
+        self.eval_metric = args.eval_metric
+        self.stats = {}
+        for stat in [ac.DEV_BLEU, ac.DEV_PPL, ac.DEV_SMPPL]:
+            self.stats[stat] = {}
+            for pair in self.pairs:
+                self.stats[stat][pair] = []
+            self.stats[stat]['model'] = []
         
     def _construct_data_filenames(self):
         raw_dir = self.raw_dir
@@ -86,8 +89,7 @@ class IO(object):
         
     def _construct_ckpt_path(self, pair, score):
         dump_dir = self.dump_dir
-        if pair is None:
-            pair = 'model'
+        pair = pair if pair else 'model'
         
         if score is None:
             ckpt_path = join(dump_dir, f'{pair}.pth')
@@ -217,20 +219,24 @@ class IO(object):
             os.remove(ckpt_path)
 
     def load_best_ckpt(self, pair):
-        best_score = max(self.dev_bleus[pair])
+        stat = self.eval_metric
+        func = max if stat == ac.DEV_BLEU else min
+        best_score = func(self.stats[stat][pair])
         return self._load_ckpt(pair, best_score)
 
     def save_current_ckpt(self, state_dict):
         self._save_ckpt(state_dict)
 
     def update_best_ckpt(self, state_dict, pair=None):
-        pair_name = pair if pair else 'all'
-        if self.dev_bleus[pair_name][-1] == max(self.dev_bleus[pair_name]):
-            # remove previous best ckpt
-            if len(self.dev_bleus[pair_name]) > 1:
-                self._remove_ckpt(pair, max(self.dev_bleus[pair_name][:-1]))
-            self._save_ckpt(state_dict, pair, self.dev_bleus[pair_name][-1])
-    
+        pair = pair if pair else 'model'
+        stat = self.eval_metric
+        func = max if stat == ac.DEV_BLEU else min
+        if self.stats[stat][pair][-1] == func(self.stats[stat][pair]):
+            # remove prev best ckpt
+            if len(self.stats[stat][pair]) > 1:
+                self._remove_ckpt(pair, func(self.stats[stat][pair][:-1]))
+            self._save_ckpt(state_dict, pair, self.stats[stat][pair][-1])
+
     def _print_best_trans(self, pair, best_trans, best_trans_file):
         all_best_trans = ''
         for line in best_trans:
@@ -298,18 +304,21 @@ class IO(object):
         # calculate BLEU
         bleu, msg = self._calc_bleu(nobpe_best_trans_file, ref_file)
         self.logger.info(msg)
-        self.dev_bleus[pair].append(bleu)
+        self.save_score(ac.DEV_BLEU, bleu, pair)
 
-        # save translation with BLEU score for future reference
-        final_best_trans_file = self._construct_dev_trans_path(pair, best=True, bpe=False, score=bleu)
-        final_beam_trans_file = self._construct_dev_trans_path(pair, best=False, bpe=False, score=bleu)
+        # save translation with BLEU score (or perplexity) for future reference
+        stat = self.eval_metric
+        score = self.stats[stat][pair][-1]
+        final_best_trans_file = self._construct_dev_trans_path(pair, best=True, bpe=False, score=score)
+        final_beam_trans_file = self._construct_dev_trans_path(pair, best=False, bpe=False, score=score)
         shutil.copyfile(nobpe_best_trans_file, final_best_trans_file)
         shutil.copyfile(nobpe_beam_trans_file, final_beam_trans_file)
 
         return bleu
 
-    def save_avg_bleu_score(self, score):
-        self.dev_bleus['all'].append(score)
+    def save_score(self, stat, score, pair=None):
+        pair = pair if pair else 'model'
+        self.stats[stat][pair].append(round(score,2))
 
     def print_test_translations(self, pair, best_trans, beam_trans, input_file=None, output_file=None):
         src_file, best_trans_file = self._construct_test_trans_path(pair, best=True, input_file=input_file, output_file=output_file)
