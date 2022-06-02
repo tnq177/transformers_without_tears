@@ -24,6 +24,7 @@ def base():
     config['lr_scale'] = 1.
     config['lr_decay'] = 0.8
     config['stop_lr'] = 5e-5
+    config['eval_metric'] = ac.DEV_BLEU
     config['patience'] = 3
     config['alpha'] = 0.7
     config['label_smoothing'] = 0.1

@@ -145,6 +145,7 @@ Many options in `configurations.py` are pretty important:
 * ``lr_scale``: multiply learning rate by this value
 * ``lr_decay``: decay factor (new_lr <-- old_lr * lr_decay)
 * ``stop_lr``: stop training when learning rate reaches this value
+* ``eval_metric``: evaluation metric to use when deciding whether to decay learning rate. Default is ``DEV_BLEU`` but you can also use ``DEV_PPL`` (ordinary dev perplexity) or ``DEV_SMPPL`` (dev perplexity after label smoothing)
 * ``label_smoothing``: default to 0.1 like in original paper
 * ``batch_size``: number of src+tgt tokens in a batch
 * ``epoch_size``: number of iterations we consider one epoch

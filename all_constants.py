@@ -22,4 +22,9 @@ ORG_WU = 1
 # warmup like ORG_WU but stays there and decay as NO_WU
 UPFLAT_WU = 2
 
+# options for what to look at while adjusting learning rate
+DEV_BLEU = 0
+DEV_PPL = 1 # ordinary perplexity
+DEV_SMPPL = 2 # perplexity after label smoothing
+
 SEED = 147
