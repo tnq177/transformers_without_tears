@@ -124,7 +124,7 @@ if __name__ == '__main__':
                 # for train_and_translate mode, need to reload best checkpoint for that pair
                 if args.mode == 'train_and_translate':
                     model.load_state_dict(io.load_best_ckpt(pair))
-                all_best_trans, all_beam_trans = controller.translate(pair, ac.TEST)
+                all_best_trans, all_beam_trans = controller.translate(pair, ac.TEST, batch_size=args.decode_batch_size)
                 io.print_test_translations(pair, all_best_trans, all_beam_trans)
         # translate other files
         if args.files_langs is not None:
@@ -134,5 +134,5 @@ if __name__ == '__main__':
                 if args.mode == 'train_and_translate':
                     model.load_state_dict(io.load_best_ckpt(pair))
                 for (input_file, output_file) in files_langs[pair]:
-                    all_best_trans, all_beam_trans = controller.translate(pair, ac.TEST, input_file=input_file)
+                    all_best_trans, all_beam_trans = controller.translate(pair, ac.TEST, input_file=input_file, batch_size=args.decode_batch_size)
                     io.print_test_translations(pair, all_best_trans, all_beam_trans, input_file=input_file, output_file=output_file)

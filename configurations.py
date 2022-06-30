@@ -37,6 +37,7 @@ def base():
     config['word_dropout'] = 0.1
 
     # Decoding
+    config['decode_batch_size'] = 4096
     config['beam_size'] = 4
     config['beam_alpha'] = 0.6
     config['use_rel_max_len'] = True

@@ -311,7 +311,7 @@ class Controller(object):
         with torch.no_grad():
             for pair in self.pairs:
                 self.logger.info(f'--> {pair}')
-                all_best_trans, all_beam_trans = self.translate(pair, ac.DEV)
+                all_best_trans, all_beam_trans = self.translate(pair, ac.DEV, batch_size=self.args.decode_batch_size)
                 bleu = self.io.print_dev_translations_and_calculate_BLEU(pair, all_best_trans, all_beam_trans)
                 avg_bleus.append(bleu)
                 self.stats[pair]['dev_bleus'].append(bleu)
