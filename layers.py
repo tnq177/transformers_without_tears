@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch.nn import Parameter
 import torch.nn.functional as F
+import all_constants as ac
 
 
 class MultiheadAttention(nn.Module):
@@ -307,7 +308,7 @@ class Decoder(nn.Module):
 
         return x
 
-    def beam_decode(self, encoder_out, encoder_mask, get_input_fn, logprob_fn, bos_id, eos_id, max_len, beam_size=4, alpha=-1):
+    def beam_decode(self, encoder_out, encoder_mask, get_input_fn, logprob_fn, bos_id, eos_id, max_len, beam_size=4, alpha=-1, decode_method=ac.BEAM_SEARCH, allow_empty=False):
         # first step, beam=1
         batch_size = encoder_out.size(0)
         inp = get_input_fn(torch.tensor([bos_id] * batch_size).reshape(batch_size, 1), 0) # [bsz, 1, D]
@@ -319,8 +320,13 @@ class Decoder(nn.Module):
 
         y = self.beam_step(inp, cache).squeeze_(1) # [bsz, D]
         probs = logprob_fn(y) # [bsz, V]
-        probs[:, eos_id] = float('-inf') # no <eos> now
-        all_probs, symbols = torch.topk(probs, beam_size, dim=-1) # ([bsz, beam], [bsz, beam])
+        if decode_method == ac.BEAM_SEARCH:
+            if not allow_empty:
+                probs[:, eos_id] = float('-inf') # no <eos> now
+            all_probs, symbols = torch.topk(probs, beam_size, dim=-1) # ([bsz, beam], [bsz, beam])
+        else:
+            symbols = torch.multinomial(torch.exp(probs), beam_size, replacement=True)
+            all_probs = torch.gather(probs, -1, symbols)
 
         last_probs = all_probs.reshape(batch_size, beam_size)
         last_scores = last_probs.clone()
@@ -373,7 +379,7 @@ class Decoder(nn.Module):
             probs = logprob_fn(ys) # [bsz x beam, V]
             last_probs = last_probs.reshape(-1, 1) # [bsz x beam, 1]
             last_scores = last_scores.reshape(-1, 1)
-            length_penalty = 1.0 if alpha == -1 else (5.0 + time_step + 1.0) ** alpha / 6.0 ** alpha
+            length_penalty = 1.0 if alpha == -1 or decode_method == ac.SAMPLING else (5.0 + time_step + 1.0) ** alpha / 6.0 ** alpha
             finished_mask = last_symbols.reshape(-1) == eos_id
             beam_probs = probs.clone()
             if finished_mask.any():
@@ -389,23 +395,33 @@ class Decoder(nn.Module):
             else:
                 beam_scores = beam_probs / length_penalty
 
-            beam_probs = beam_probs.reshape(bsz, -1)
-            beam_scores = beam_scores.reshape(bsz, -1)
-            max_scores, idxs = torch.topk(beam_scores, beam_size, dim=-1) # ([bsz, beam], [bsz, beam])
-            parent_idxs = idxs // num_classes
-            symbols = (idxs - parent_idxs * num_classes).type(idxs.type()) # [bsz, beam]
+            if decode_method == ac.BEAM_SEARCH:
+                beam_probs = beam_probs.reshape(bsz, -1) # [bsz, beam x D]
+                beam_scores = beam_scores.reshape(bsz, -1) # [bsz, beam x D]
+                k_scores, idxs = torch.topk(beam_scores, beam_size, dim=-1) # ([bsz, beam], [bsz, beam])
 
-            last_probs = torch.gather(beam_probs, -1, idxs)
-            last_scores = max_scores
-            parent_idxs = parent_idxs + torch.arange(bsz).unsqueeze_(1).type(parent_idxs.type()) * beam_size
-            parent_idxs = parent_idxs.reshape(-1)
-            all_symbols = all_symbols.reshape(bsz * beam_size, -1)[parent_idxs].reshape(bsz, beam_size, -1)
-            all_symbols = torch.cat((all_symbols, symbols.unsqueeze_(-1)), -1)
+                parent_idxs = idxs // num_classes
+                symbols = (idxs - parent_idxs * num_classes).type(idxs.type()) # [bsz, beam]
 
-            for i in range(self.num_layers):
-                seq_len = cache[i]['att']['k'].size(2)
-                cache[i]['att']['k'] = cache[i]['att']['k'].reshape(bsz * beam_size, seq_len, -1)[parent_idxs].reshape(bsz, beam_size, seq_len, -1)
-                cache[i]['att']['v'] = cache[i]['att']['v'].reshape(bsz * beam_size, seq_len, -1)[parent_idxs].reshape(bsz, beam_size, seq_len, -1)
+                last_probs = torch.gather(beam_probs, -1, idxs) # [bsz, beam]
+                last_scores = k_scores
+                parent_idxs = parent_idxs + torch.arange(bsz).unsqueeze_(1).type(parent_idxs.type()) * beam_size
+                parent_idxs = parent_idxs.reshape(-1)
+                all_symbols = all_symbols.reshape(bsz * beam_size, -1)[parent_idxs].reshape(bsz, beam_size, -1)
+                all_symbols = torch.cat((all_symbols, symbols.unsqueeze_(-1)), -1)
+
+                for i in range(self.num_layers):
+                    seq_len = cache[i]['att']['k'].size(2)
+                    cache[i]['att']['k'] = cache[i]['att']['k'].reshape(bsz * beam_size, seq_len, -1)[parent_idxs].reshape(bsz, beam_size, seq_len, -1)
+                    cache[i]['att']['v'] = cache[i]['att']['v'].reshape(bsz * beam_size, seq_len, -1)[parent_idxs].reshape(bsz, beam_size, seq_len, -1)
+            else:
+                idxs = torch.multinomial(torch.exp(beam_scores), 1) # [bsz x beam, 1]
+                last_probs = torch.gather(beam_probs, -1, idxs) # [bsz x beam, 1]
+                last_scores = torch.gather(beam_scores, -1, idxs) # [bsz x beam, 1]
+                last_probs = last_probs.reshape(bsz, beam_size)
+                last_scores = last_scores.reshape(bsz, beam_size)
+                symbols = idxs.reshape(bsz, beam_size, 1)
+                all_symbols = torch.cat((all_symbols, symbols), -1)
 
         # Some hypotheses might haven't reached EOS yet and are cut off by length limit
         # make sure they are returned
