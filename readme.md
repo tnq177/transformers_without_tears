@@ -155,9 +155,12 @@ Many options in `configurations.py` are pretty important:
 
 Configurations for decoding:
 
-* ``beam_size``: beam size
-* ``beam_alpha``: length normalization using [Wu et al.'s magic formula](https://arxiv.org/abs/1609.08144) (to turn off length normalization, set this to `-1`)
+* ``decode_method``: either beam search or ancestral sampling. (note that, if you are doing training, whatever you choose here will be used when evaluating on the dev data. so you should probably make sure to use beam search mode if you are training)
+* ``decode_batch_size``: batch size to use during decoding (the default works well for beam search; you might want to lower the batch size if doing sampling and taking many samples)
+* ``beam_size``: beam size (or number of samples to generate, if sampling)
+* ``beam_alpha``: length normalization using [Wu et al.'s magic formula](https://arxiv.org/abs/1609.08144) (to turn off length normalization, set this to `-1`; it is also ignored during sampling)
 * ``use_rel_max_len, rel_max_len, abs_max_len``: decoding needs a max length; determines whether this should be relative (based on length of src sentence) or absolute. defaults to relative length 50 (as used in [Attention Is All You need](https://arxiv.org/abs/1706.03762)), meaning src length + 50 tokens
+* ``allow_empty``: whether to allow the empty string as a translation when doing beam search decoding (this parameter is ignored during sampling)
 
 
 ## Some other notes

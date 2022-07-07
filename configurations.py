@@ -37,11 +37,14 @@ def base():
     config['word_dropout'] = 0.1
 
     # Decoding
+    config['decode_method'] = ac.BEAM_SEARCH
+    config['decode_batch_size'] = 4096
     config['beam_size'] = 4
     config['beam_alpha'] = 0.6
     config['use_rel_max_len'] = True
     config['rel_max_len'] = 50
     config['abs_max_len'] = 300
+    config['allow_empty'] = False
 
     return config
 

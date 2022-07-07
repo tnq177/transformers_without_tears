@@ -142,4 +142,5 @@ class Transformer(nn.Module):
             max_lengths = torch.sum(src != ac.PAD_ID, dim=-1).type(src.type()) + self.args.rel_max_len
         else:
             max_lengths = torch.tensor([self.args.abs_max_len] * src.size(0)).type(src.type())
-        return self.decoder.beam_decode(encoder_outputs, encoder_mask, get_tgt_inp, logprob_fn, ac.BOS_ID, ac.EOS_ID, max_lengths, beam_size=self.args.beam_size, alpha=self.args.beam_alpha)
+
+        return self.decoder.beam_decode(encoder_outputs, encoder_mask, get_tgt_inp, logprob_fn, ac.BOS_ID, ac.EOS_ID, max_lengths, beam_size=self.args.beam_size, alpha=self.args.beam_alpha, decode_method=self.args.decode_method, allow_empty=self.args.allow_empty)

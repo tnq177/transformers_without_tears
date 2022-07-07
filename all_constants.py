@@ -27,4 +27,8 @@ DEV_BLEU = 0
 DEV_PPL = 1 # ordinary perplexity
 DEV_SMPPL = 2 # perplexity after label smoothing
 
+# decoding methods
+BEAM_SEARCH = 0
+SAMPLING = 1
+
 SEED = 147
