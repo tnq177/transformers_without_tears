@@ -12,6 +12,7 @@ import all_constants as ac
 
 class IO(object):
     def __init__(self, args):
+        self.args = args
         self.raw_dir = args.raw_data_dir
         self.proc_dir = args.processed_data_dir
         self.dump_dir = args.dump_dir
@@ -115,20 +116,24 @@ class IO(object):
         return trans_path
     
     def _construct_test_trans_path(self, pair, best, input_file, output_file):
-        trans_dir = self.trans_dir
         if input_file:
             src_file = input_file
-            if best:
-                output_file = join(trans_dir, output_file + '.best_trans')
-            else:
-                output_file = join(trans_dir, output_file + '.beam_trans')
+            beginning = output_file
         else:
             src_file = self.data_files[pair][ac.TEST]['src_bpe']
-            if best:
-                output_file = join(trans_dir, f'{ac.TEST}.{pair}.bpe.best_trans')
+            beginning = f'{ac.TEST}.{pair}.bpe'
+
+        if best:
+            end = '.best_trans'
+        else:
+            if self.args.decode_method == ac.BEAM_SEARCH:
+                end = '.beam_trans'
             else:
-                output_file = join(trans_dir, f'{ac.TEST}.{pair}.bpe.beam_trans')
-        return src_file, output_file
+                end = '.samples'
+
+        trans_dir = self.trans_dir
+        return_file = join(trans_dir, beginning+end)
+        return src_file, return_file
 
     def get_logger(self):
         """Global logger for every logging"""

@@ -331,15 +331,22 @@ class Controller(object):
 
             return words
 
-        sorted_rows = np.argsort(scores)[::-1]
+        # if beam search, we want scores sorted in score order.
+        # if sampling, better to have them unsorted
+        if self.args.decode_method == ac.BEAM_SEARCH:
+            sorted_rows = np.argsort(scores)[::-1]
+        else:
+            sorted_rows = range(scores.shape[0])
         best_trans = None
         beam_trans = []
+        best_score = float('-inf')
         for i, r in enumerate(sorted_rows):
             trans_ids = symbols[r]
             trans_out = ids_to_trans(trans_ids)
             beam_trans.append([trans_out, scores[r], probs[r]])
-            if i == 0: # highest prob trans
+            if scores[r] > best_score: # highest prob trans
                 best_trans = trans_out
+                best_score = scores[r]
 
         return best_trans, beam_trans
 
