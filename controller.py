@@ -343,30 +343,77 @@ class Controller(object):
 
         return best_trans, beam_trans
 
+    # when sampling, allows you to request an arbitrarily large number of
+    # samples per line, by duplicating batches to avoid out-of-memory errors
+    def split_batch(self, src):
+        batch_size = src.size(0)
+        beam_size = self.args.beam_size
+        max_beams = self.args.max_parallel_beams
+        if (self.args.decode_method == ac.BEAM_SEARCH) or \
+           (max_beams == 0) or \
+           (batch_size * beam_size <= max_beams):
+            return ([src], 1, beam_size)
+
+        sent_length = src.size(1)
+        srcs = []
+        i = 0
+
+        # TODO: remove unnecessary padding
+        curr = torch.zeros(0,sent_length).type(torch.long)
+        space_left = max_beams
+        beams_left = beam_size
+
+        while i < batch_size:
+            num_copies = min(space_left, beams_left)
+            copies = src[i].unsqueeze(0).expand(num_copies, -1)
+            curr = torch.cat((curr, copies), 0)
+
+            space_left -= num_copies
+            if space_left == 0:
+                srcs.append(curr)
+                curr = torch.zeros(0,sent_length).type(torch.long)
+                space_left = max_beams
+
+            beams_left -= num_copies
+            if beams_left == 0:
+                i += 1
+                beams_left = beam_size
+
+        if curr.size(0) > 0:
+            srcs.append(curr)
+
+        return (srcs, beam_size, 1)
+
     def _translate(self, src_batches, sorted_idxs, src_lang_idx, tgt_lang_idx, logit_mask):
-        all_best_trans = [''] * sorted_idxs.shape[0]
-        all_beam_trans = [''] * sorted_idxs.shape[0]
+        all_best_trans = [[] for i in range(sorted_idxs.shape[0])]
+        all_beam_trans = [[] for i in range(sorted_idxs.shape[0])]
 
         start = time.time()
         count = 0
         self.model.eval()
         with torch.no_grad():
-            for src in src_batches:
-                src_cuda = src.to(self.device)
-                logit_mask = logit_mask.to(self.device)
-                ret = self.model.beam_decode(src_cuda, src_lang_idx, tgt_lang_idx, logit_mask)
-                for x in ret:
-                    probs = x['probs'].cpu().detach().numpy().reshape([-1])
-                    scores = x['scores'].cpu().detach().numpy().reshape([-1])
-                    symbols = x['symbols'].cpu().detach().numpy()
+            for orig_src in src_batches:
+                (new_batches, inc, beam_size) = self.split_batch(orig_src)
+                mini_count = 0
+                for src in new_batches:
+                    src_cuda = src.to(self.device)
+                    logit_mask = logit_mask.to(self.device)
+                    ret = self.model.beam_decode(src_cuda, src_lang_idx, tgt_lang_idx, logit_mask, beam_size)
+                    for x in ret:
+                        probs = x['probs'].cpu().detach().numpy().reshape([-1])
+                        scores = x['scores'].cpu().detach().numpy().reshape([-1])
+                        symbols = x['symbols'].cpu().detach().numpy()
 
-                    best_trans, beam_trans = self.get_trans(probs, scores, symbols)
-                    all_best_trans[sorted_idxs[count]] = best_trans
-                    all_beam_trans[sorted_idxs[count]] = beam_trans
+                        best_trans, beam_trans = self.get_trans(probs, scores, symbols)
+                        all_best_trans[sorted_idxs[count]] = best_trans
+                        all_beam_trans[sorted_idxs[count]].extend(beam_trans)
 
-                    count += 1
-                    if count % 100 == 0:
-                        self.logger.info(f'   Translating line {count}, avg {count / (time.time() - start):.2f} sents/second')
+                        mini_count += 1
+                        if mini_count == inc:
+                            mini_count = 0
+                            count += 1
+                            if count % 100 == 0:
+                                self.logger.info(f'   Translating line {count}, avg {count / (time.time() - start):.2f} sents/second')
 
         self.model.train()
 
