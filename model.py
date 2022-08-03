@@ -116,7 +116,7 @@ class Transformer(nn.Module):
         logits[:, ~logit_mask] = -1e9
         return logits
 
-    def beam_decode(self, src, src_lang_idx, tgt_lang_idx, logit_mask):
+    def beam_decode(self, src, src_lang_idx, tgt_lang_idx, logit_mask, beam_size):
         embed_dim = self.args.embed_dim
         max_len = src.size(1) + self.args.rel_max_len + 1 if self.args.use_rel_max_len else self.args.abs_max_len + 1
         max_len = max(max_len, src.size(1))
@@ -143,4 +143,4 @@ class Transformer(nn.Module):
         else:
             max_lengths = torch.tensor([self.args.abs_max_len] * src.size(0)).type(src.type())
 
-        return self.decoder.beam_decode(encoder_outputs, encoder_mask, get_tgt_inp, logprob_fn, ac.BOS_ID, ac.EOS_ID, max_lengths, beam_size=self.args.beam_size, alpha=self.args.beam_alpha, decode_method=self.args.decode_method, allow_empty=self.args.allow_empty)
+        return self.decoder.beam_decode(encoder_outputs, encoder_mask, get_tgt_inp, logprob_fn, ac.BOS_ID, ac.EOS_ID, max_lengths, beam_size=beam_size, alpha=self.args.beam_alpha, decode_method=self.args.decode_method, allow_empty=self.args.allow_empty)

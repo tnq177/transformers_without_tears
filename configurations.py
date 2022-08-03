@@ -40,6 +40,7 @@ def base():
     config['decode_method'] = ac.BEAM_SEARCH
     config['decode_batch_size'] = 4096
     config['beam_size'] = 4
+    config['max_parallel_beams'] = 0
     config['beam_alpha'] = 0.6
     config['use_rel_max_len'] = True
     config['rel_max_len'] = 50
