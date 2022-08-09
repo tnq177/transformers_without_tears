@@ -236,14 +236,17 @@ class Controller(object):
         # we decay learning rate wrt avg_bleu (or a different evaluation metric)
         if self.eval_metric == ac.DEV_BLEU:
             stat = 'avg_bleus'
-            func = min
         elif self.eval_metric == ac.DEV_PPL:
             stat = 'avg_ppls'
-            func = max
         else:
             stat = 'avg_smppls'
-            func = max
-        cond = len(self.stats[stat]) > self.patience and self.stats[stat][-1] < func(self.stats[stat][-1 - self.patience: -1])
+
+        cond1 = len(self.stats[stat]) > self.patience
+        if self.eval_metric == ac.DEV_BLEU:
+            cond = cond1 and self.stats[stat][-1] < min(self.stats[stat][-1 - self.patience: -1])
+        else:
+            cond = cond1 and self.stats[stat][-1] > max(self.stats[stat][-1 - self.patience: -1])
+        
         if cond:
             past_stats = self.stats[stat][-1 - self.patience:]
             past_stats = map(str, past_stats)
