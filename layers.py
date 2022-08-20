@@ -415,7 +415,10 @@ class Decoder(nn.Module):
                     cache[i]['att']['k'] = cache[i]['att']['k'].reshape(bsz * beam_size, seq_len, -1)[parent_idxs].reshape(bsz, beam_size, seq_len, -1)
                     cache[i]['att']['v'] = cache[i]['att']['v'].reshape(bsz * beam_size, seq_len, -1)[parent_idxs].reshape(bsz, beam_size, seq_len, -1)
             else:
-                idxs = torch.multinomial(torch.exp(beam_scores), 1) # [bsz x beam, 1]
+                if finished_mask.any():
+                    probs[finished_mask][:, :] = float('-inf')
+                    probs[finished_mask][:, eos_id] = 0
+                idxs = torch.multinomial(torch.exp(probs), 1) # [bsz x beam, 1]
                 last_probs = torch.gather(beam_probs, -1, idxs) # [bsz x beam, 1]
                 last_scores = torch.gather(beam_scores, -1, idxs) # [bsz x beam, 1]
                 last_probs = last_probs.reshape(bsz, beam_size)
