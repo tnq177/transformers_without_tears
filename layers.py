@@ -319,18 +319,20 @@ class Decoder(nn.Module):
             cache[i]['cross_att_v'] = self.cross_atts[i].proj_v(encoder_out).unsqueeze_(1)
 
         y = self.beam_step(inp, cache).squeeze_(1) # [bsz, D]
-        probs = logprob_fn(y) # [bsz, V]
-        if decode_method == ac.BEAM_SEARCH:
-            if not allow_empty:
-                probs[:, eos_id] = float('-inf') # no <eos> now
-            all_probs, symbols = torch.topk(probs, beam_size, dim=-1) # ([bsz, beam], [bsz, beam])
-        else:
-            symbols = torch.multinomial(torch.exp(probs), beam_size, replacement=True)
-            all_probs = torch.gather(probs, -1, symbols)
+        next_token_probs = logprob_fn(y) # [bsz, V]
 
-        last_probs = all_probs.reshape(batch_size, beam_size)
-        last_scores = last_probs.clone()
-        all_symbols = symbols.reshape(batch_size, beam_size, 1)
+        if decode_method == ac.BEAM_SEARCH:
+            # by default, do not allow EOS in first position
+            if not allow_empty:
+                next_token_probs[:, eos_id] = float('-inf')
+            chosen_probs, chosen_symbols = torch.topk(next_token_probs, beam_size, dim=-1) # ([bsz, beam], [bsz, beam])
+        else:
+            chosen_symbols = torch.multinomial(torch.exp(next_token_probs), beam_size, replacement=True)
+            chosen_probs = torch.gather(next_token_probs, -1, chosen_symbols)
+
+        cumulative_probs = chosen_probs.reshape(batch_size, beam_size, 1)
+        cumulative_scores = cumulative_probs.clone()
+        cumulative_symbols = chosen_symbols.reshape(batch_size, beam_size, 1)
 
         cache['encoder_mask'] = encoder_mask.expand(-1, beam_size, -1, -1, -1)
         for i in range(self.num_layers):
@@ -339,27 +341,28 @@ class Decoder(nn.Module):
             cache[i]['cross_att_k'] = cache[i]['cross_att_k'].expand(-1, beam_size, -1, -1)
             cache[i]['cross_att_v'] = cache[i]['cross_att_v'].expand(-1, beam_size, -1, -1)
 
-        num_classes = probs.size(-1)
+        num_classes = next_token_probs.size(-1)
         not_eos_mask = (torch.arange(num_classes).reshape(1, -1) != eos_id).type(encoder_mask.type())
         maximum_length = max_len.max().item()
         ret = [None] * batch_size
         batch_idxs = torch.arange(batch_size)
         for time_step in range(1, maximum_length + 1):
+            # once all the beams/samples for a sentence are finished, can stop doing computations on it
             surpass_length = (max_len < time_step) + (time_step == maximum_length)
-            finished_decoded = torch.sum((all_symbols[:, :, -1] == eos_id).type(max_len.type()), -1) == beam_size
+            finished_decoded = torch.sum((cumulative_symbols[:, :, -1] == eos_id).type(max_len.type()), -1) == beam_size
             finished_sents = surpass_length + finished_decoded
             if finished_sents.any():
                 for j in range(finished_sents.size(0)):
                     if finished_sents[j]:
                         ret[batch_idxs[j]] = {
-                            'symbols': all_symbols[j].clone(),
-                            'probs': last_probs[j].clone(),
-                            'scores': last_scores[j].clone()
+                            'symbols': cumulative_symbols[j].clone(),
+                            'probs': cumulative_probs[j].clone(),
+                            'scores': cumulative_scores[j].clone()
                         }
 
-                all_symbols = all_symbols[~finished_sents]
-                last_probs = last_probs[~finished_sents]
-                last_scores = last_scores[~finished_sents]
+                cumulative_symbols = cumulative_symbols[~finished_sents]
+                cumulative_probs = cumulative_probs[~finished_sents]
+                cumulative_scores = cumulative_scores[~finished_sents]
                 max_len = max_len[~finished_sents]
                 batch_idxs = batch_idxs[~finished_sents]
                 cache['encoder_mask'] = cache['encoder_mask'][~finished_sents]
@@ -372,30 +375,34 @@ class Decoder(nn.Module):
             if finished_sents.all():
                 break
 
-            bsz = all_symbols.size(0)
-            last_symbols = all_symbols[:, :, -1]
+            bsz = cumulative_symbols.size(0)
+            last_symbols = cumulative_symbols[:, :, -1]
             inps = get_input_fn(last_symbols, time_step).reshape(bsz * beam_size, -1).unsqueeze_(1) # [bsz x beam, 1, D]
             ys = self.beam_step(inps, cache).squeeze_(1) # [bsz x beam, D]
-            probs = logprob_fn(ys) # [bsz x beam, V]
-            last_probs = last_probs.reshape(-1, 1) # [bsz x beam, 1]
-            last_scores = last_scores.reshape(-1, 1)
-            length_penalty = 1.0 if alpha == -1 or decode_method == ac.SAMPLING else (5.0 + time_step + 1.0) ** alpha / 6.0 ** alpha
+            next_token_probs = logprob_fn(ys) # [bsz x beam, V]
+            cumulative_probs = cumulative_probs.reshape(-1, 1) # [bsz x beam, 1]
+            cumulative_scores = cumulative_scores.reshape(-1, 1) # [bsz x beam, 1]
             finished_mask = last_symbols.reshape(-1) == eos_id
-            beam_probs = probs.clone()
-            if finished_mask.any():
-                beam_probs[finished_mask] = last_probs[finished_mask].expand(-1, num_classes).masked_fill(not_eos_mask, float('-inf'))
-                beam_probs[~finished_mask] = last_probs[~finished_mask] + probs[~finished_mask]
-            else:
-                beam_probs = last_probs + probs
-
-            beam_scores = beam_probs.clone()
-            if finished_mask.any():
-                beam_scores[finished_mask] = last_scores[finished_mask].expand(-1, num_classes).masked_fill(not_eos_mask, float('-inf'))
-                beam_scores[~finished_mask] = beam_probs[~finished_mask] / length_penalty
-            else:
-                beam_scores = beam_probs / length_penalty
-
+            
+            # beam search
             if decode_method == ac.BEAM_SEARCH:
+                # compute the cumulative probabilities and scores for all beams under consideration
+                beam_probs = next_token_probs.clone()
+                if finished_mask.any():
+                    beam_probs[finished_mask] = cumulative_probs[finished_mask].expand(-1, num_classes).masked_fill(not_eos_mask, float('-inf'))
+                    beam_probs[~finished_mask] = cumulative_probs[~finished_mask] + next_token_probs[~finished_mask]
+                else:
+                    beam_probs = cumulative_probs + next_token_probs
+
+                beam_scores = beam_probs.clone()
+                length_penalty = 1.0 if alpha == -1 else (5.0 + time_step + 1.0) ** alpha / 6.0 ** alpha
+                if finished_mask.any():
+                    beam_scores[finished_mask] = cumulative_scores[finished_mask].expand(-1, num_classes).masked_fill(not_eos_mask, float('-inf'))
+                    beam_scores[~finished_mask] = beam_probs[~finished_mask] / length_penalty
+                else:
+                    beam_scores = beam_probs / length_penalty
+
+                # choose top k beams
                 beam_probs = beam_probs.reshape(bsz, -1) # [bsz, beam x D]
                 beam_scores = beam_scores.reshape(bsz, -1) # [bsz, beam x D]
                 k_scores, idxs = torch.topk(beam_scores, beam_size, dim=-1) # ([bsz, beam], [bsz, beam])
@@ -403,34 +410,42 @@ class Decoder(nn.Module):
                 parent_idxs = idxs // num_classes
                 symbols = (idxs - parent_idxs * num_classes).type(idxs.type()) # [bsz, beam]
 
-                last_probs = torch.gather(beam_probs, -1, idxs) # [bsz, beam]
-                last_scores = k_scores
+                cumulative_probs = torch.gather(beam_probs, -1, idxs) # [bsz, beam]
+                cumulative_scores = k_scores
                 parent_idxs = parent_idxs + torch.arange(bsz).unsqueeze_(1).type(parent_idxs.type()) * beam_size
                 parent_idxs = parent_idxs.reshape(-1)
-                all_symbols = all_symbols.reshape(bsz * beam_size, -1)[parent_idxs].reshape(bsz, beam_size, -1)
-                all_symbols = torch.cat((all_symbols, symbols.unsqueeze_(-1)), -1)
+                cumulative_symbols = cumulative_symbols.reshape(bsz * beam_size, -1)[parent_idxs].reshape(bsz, beam_size, -1)
+                cumulative_symbols = torch.cat((cumulative_symbols, symbols.unsqueeze_(-1)), -1)
 
                 for i in range(self.num_layers):
                     seq_len = cache[i]['att']['k'].size(2)
                     cache[i]['att']['k'] = cache[i]['att']['k'].reshape(bsz * beam_size, seq_len, -1)[parent_idxs].reshape(bsz, beam_size, seq_len, -1)
                     cache[i]['att']['v'] = cache[i]['att']['v'].reshape(bsz * beam_size, seq_len, -1)[parent_idxs].reshape(bsz, beam_size, seq_len, -1)
+            # sampling
             else:
-                idxs = torch.multinomial(torch.exp(beam_scores), 1) # [bsz x beam, 1]
-                last_probs = torch.gather(beam_probs, -1, idxs) # [bsz x beam, 1]
-                last_scores = torch.gather(beam_scores, -1, idxs) # [bsz x beam, 1]
-                last_probs = last_probs.reshape(bsz, beam_size)
-                last_scores = last_scores.reshape(bsz, beam_size)
+                # (currently, probs and scores are always the same during sampling)
+                beam_probs = cumulative_probs + next_token_probs
+                beam_scores = cumulative_scores + next_token_probs
+                if finished_mask.any():
+                    next_token_probs[finished_mask][:, :] = float('-inf')
+                    next_token_probs[finished_mask][:, eos_id] = 0
+                idxs = torch.multinomial(torch.exp(next_token_probs), 1) # [bsz x beam, 1]
+
+                cumulative_probs = torch.gather(beam_probs, -1, idxs) # [bsz x beam, 1]
+                cumulative_scores = torch.gather(beam_scores, -1, idxs) # [bsz x beam, 1]
+                cumulative_probs = cumulative_probs.reshape(bsz, beam_size)
+                cumulative_scores = cumulative_scores.reshape(bsz, beam_size)
                 symbols = idxs.reshape(bsz, beam_size, 1)
-                all_symbols = torch.cat((all_symbols, symbols), -1)
+                cumulative_symbols = torch.cat((cumulative_symbols, symbols), -1)
 
         # Some hypotheses might haven't reached EOS yet and are cut off by length limit
         # make sure they are returned
         if batch_idxs.size(0) > 0:
             for j in range(batch_idxs.size(0)):
                 ret[batch_idxs[j]] = {
-                    'symbols': all_symbols[j].clone(),
-                    'probs': last_probs[j].clone(),
-                    'scores': last_scores[j].clone()
+                    'symbols': cumulative_symbols[j].clone(),
+                    'probs': cumulative_probs[j].clone(),
+                    'scores': cumulative_scores[j].clone()
                 }
 
         return ret
