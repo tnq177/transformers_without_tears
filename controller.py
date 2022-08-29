@@ -314,7 +314,7 @@ class Controller(object):
         with torch.no_grad():
             for pair in self.pairs:
                 self.logger.info(f'--> {pair}')
-                all_best_trans, all_beam_trans = self.translate(pair, ac.DEV, batch_size=self.args.decode_batch_size)
+                all_best_trans, all_beam_trans = self.translate(pair, ac.DEV)
                 bleu = self.io.print_dev_translations_and_calculate_BLEU(pair, all_best_trans, all_beam_trans)
                 avg_bleus.append(bleu)
                 self.stats[pair]['dev_bleus'].append(bleu)
@@ -429,7 +429,7 @@ class Controller(object):
 
         return all_best_trans, all_beam_trans
 
-    def translate(self, pair, mode, input_file=None, batch_size=4096):
+    def translate(self, pair, mode, input_file=None):
         src_lang, tgt_lang = pair.split('2')
 
         src_lang_idx = self.data_manager.lang_vocab[src_lang]
@@ -440,6 +440,6 @@ class Controller(object):
             src_batches = data['src_batches']
             sorted_idxs = data['sorted_idxs']
         else:
-            src_batches, sorted_idxs = self.data_manager.get_translate_batches(pair, mode, input_file=input_file, batch_size=batch_size)
+            src_batches, sorted_idxs = self.data_manager.get_translate_batches(pair, mode, input_file=input_file)
 
         return self._translate(src_batches, sorted_idxs, src_lang_idx, tgt_lang_idx, logit_mask)

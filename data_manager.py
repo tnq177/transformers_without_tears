@@ -44,7 +44,7 @@ class DataManager(object):
         self.translate_data = {}
         for pair in self.pairs:
             self.args.logger.info('Loading dev translate batches')
-            src_batches, sorted_idxs = self.get_translate_batches(pair, ac.DEV, batch_size=batch_size)
+            src_batches, sorted_idxs = self.get_translate_batches(pair, ac.DEV)
             self.translate_data[pair] = {
                 'src_batches': src_batches,
                 'sorted_idxs': sorted_idxs,
@@ -69,7 +69,7 @@ class DataManager(object):
             'logit_mask': self.logit_masks[tgt_lang]
         }
 
-    def get_translate_batches(self, pair, mode, input_file=None, batch_size=4096):
+    def get_translate_batches(self, pair, mode, input_file=None):    
         data = []
         lens = []
         raw_data = self.io.load_bpe_data(pair, mode, src=True, input_file=input_file)
@@ -85,6 +85,7 @@ class DataManager(object):
         data = data[sorted_idxs]
 
         # create batches
+        batch_size = self.args.decode_batch_size
         src_batches = []
         s_idx = 0
         length = data.shape[0]
