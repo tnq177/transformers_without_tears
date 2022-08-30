@@ -407,7 +407,7 @@ class Decoder(nn.Module):
                 beam_scores = beam_scores.reshape(bsz, -1) # [bsz, beam x D]
                 k_scores, idxs = torch.topk(beam_scores, beam_size, dim=-1) # ([bsz, beam], [bsz, beam])
 
-                parent_idxs = idxs // num_classes
+                parent_idxs = torch.div(idxs, num_classes, rounding_mode='floor')
                 symbols = (idxs - parent_idxs * num_classes).type(idxs.type()) # [bsz, beam]
 
                 cumulative_probs = torch.gather(beam_probs, -1, idxs) # [bsz, beam]
