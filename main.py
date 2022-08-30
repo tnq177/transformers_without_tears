@@ -134,5 +134,5 @@ if __name__ == '__main__':
                 if args.mode == 'train_and_translate':
                     model.load_state_dict(io.load_best_ckpt(pair))
                 for (input_file, output_file) in files_langs[pair]:
-                    all_best_trans, all_beam_trans = controller.translate(pair, ac.TEST)
+                    all_best_trans, all_beam_trans = controller.translate(pair, ac.TEST, input_file=input_file)
                     io.print_test_translations(pair, all_best_trans, all_beam_trans, input_file=input_file, output_file=output_file)
