@@ -351,7 +351,7 @@ class Controller(object):
                 best_trans = trans_out
                 best_score = scores[r]
 
-        return best_trans, beam_trans
+        return best_score, best_trans, beam_trans
 
     # when sampling, allows you to request an arbitrarily large number of
     # samples per line, by duplicating batches to avoid out-of-memory errors
@@ -400,6 +400,7 @@ class Controller(object):
 
         start = time.time()
         count = 0
+        saved_best_score = float('-inf')
         self.model.eval()
         with torch.no_grad():
             for orig_src in src_batches:
@@ -414,14 +415,17 @@ class Controller(object):
                         scores = x['scores'].cpu().detach().numpy().reshape([-1])
                         symbols = x['symbols'].cpu().detach().numpy()
 
-                        best_trans, beam_trans = self.get_trans(probs, scores, symbols)
-                        all_best_trans[sorted_idxs[count]] = best_trans
+                        best_score, best_trans, beam_trans = self.get_trans(probs, scores, symbols)
+                        if best_score > saved_best_score:
+                            all_best_trans[sorted_idxs[count]] = best_trans
+                            saved_best_score = best_score
                         all_beam_trans[sorted_idxs[count]].extend(beam_trans)
 
                         mini_count += 1
                         if mini_count == inc:
                             mini_count = 0
                             count += 1
+                            saved_best_score = float('-inf')
                             if count % 100 == 0:
                                 self.logger.info(f'   Translating line {count}, avg {count / (time.time() - start):.2f} sents/second')
 
