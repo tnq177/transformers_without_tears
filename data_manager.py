@@ -93,7 +93,7 @@ class DataManager(object):
                     lens.append(len(ids))
 
         lens = np.array(lens)
-        data = np.array(data)
+        data = np.array(data, dtype=object)
         sorted_idxs = np.argsort(lens)
         lens = lens[sorted_idxs]
         data = data[sorted_idxs]
