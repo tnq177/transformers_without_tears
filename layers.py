@@ -337,7 +337,7 @@ class Decoder(nn.Module):
         not_eos_mask = (torch.arange(num_classes).reshape(1, -1) != eos_id).type(encoder_mask.type())
         maximum_length = max_len.max().item()
         ret = [None] * batch_size
-        batch_idxs = torch.arange(batch_size)
+        batch_idxs = torch.arange(batch_size, device=all_symbols.device)
         for time_step in range(1, maximum_length + 1):
             surpass_length = (max_len < time_step) + (time_step == maximum_length)
             finished_decoded = torch.sum((all_symbols[:, :, -1] == eos_id).type(max_len.type()), -1) == beam_size
