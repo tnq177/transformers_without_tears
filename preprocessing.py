@@ -209,8 +209,8 @@ if __name__ == '__main__':
                         src_data.append(src_toks)
                         tgt_data.append(tgt_toks)
 
-            src_data = np.array(src_data)
-            tgt_data = np.array(tgt_data)
+            src_data = np.array(src_data, dtype=object)
+            tgt_data = np.array(tgt_data, dtype=object)
             src_npy_file = join(data_dir, '{}/{}.{}.npy'.format(pair, mode, src_lang))
             tgt_npy_file = join(data_dir, '{}/{}.{}.npy'.format(pair, mode, tgt_lang))
             np.save(src_npy_file, src_data, allow_pickle=True)
