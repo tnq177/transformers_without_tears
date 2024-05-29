@@ -1,14 +1,14 @@
 # Ace: An implementation of Transformer in Pytorch
-[Toan Q. Nguyen](http://tnq177.github.io), University of Notre Dame  
+[Toan Q. Nguyen](http://tnq177.github.io), University of Notre Dame
 
-This is the *re*-implementation of the paper [Transformers without Tears: Improving the Normalization of Self-Attention](https://arxiv.org/pdf/1910.05895.pdf).  
+This is the *re*-implementation of the paper [Transformers without Tears: Improving the Normalization of Self-Attention](https://arxiv.org/pdf/1910.05895.pdf). In this work, we introduce SmallInit, FixNorm, and ScaleNorm for warmup-free and/or low-resource Transformer training.
 
-While the code was initially developed to experiment with multilingual NMT, all experiments mentioned in the paper and also in this guide are meant for bilingual only. Regarding the multilingual parts of the code, I followed [XLM](https://github.com/facebookresearch/XLM) and added the following changes:  
+While the code was initially developed to experiment with multilingual NMT, all experiments mentioned in the paper and also in this guide are meant for bilingual only. Regarding the multilingual parts of the code, I followed [XLM](https://github.com/facebookresearch/XLM) and added the following changes:
 
 * language embedding: each language has a an embedding vector which is summed to input word embeddings, similar to positional embedding
-* oversampling data before BPE: First training sentences are grouped by languages, then a heuristic multinomial distribution is calculated based on the size of each language. We sample sentences from each language according to this distribution so that rarer languages are better represented and won't be broken into very short BPE segments. See [their paper](https://arxiv.org/abs/1901.07291) for more information. My own implementation is in `preprocessing.py`  
+* oversampling data before BPE: First training sentences are grouped by languages, then a heuristic multinomial distribution is calculated based on the size of each language. We sample sentences from each language according to this distribution so that rarer languages are better represented and won't be broken into very short BPE segments. See [their paper](https://arxiv.org/abs/1901.07291) for more information. My own implementation is in `preprocessing.py`
 
-If we train for bilingual only, adding language embedding and oversampling data won't make any difference (according to my early experiments). I, however, keep them in the code since they might be useful later.  
+If we train for bilingual only, adding language embedding and oversampling data won't make any difference (according to my early experiments). I, however, keep them in the code since they might be useful later.
 
 This code has been tested with only Python 3.6 and PyTorch 1.4. Pretrained models (retrained, not the ones from the paper): [ted gl2en with warmup](https://drive.google.com/file/d/1yhzSLtAHTOjVTFPdpydrBRlm8lhx2jm8/view?usp=sharing), [iwslt15 en-vi with warmup](https://drive.google.com/file/d/1E4suCr-UDlMtjeNCdTrilYU8Szw56m2X/view?usp=sharing) and [without warmup](https://drive.google.com/file/d/1zgnOr1PmHEdt6_0q2Ebt07eOcfnJU-EX/view)
 ## Input and Preprocessing
@@ -18,29 +18,29 @@ Under a `data` directory, for each language pair of `src_lang` and `tgt_lang`, c
     dev.src_lang     dev.tgt_lang
     test.src_lang    test.tgt_lang
 
-The files should be tokenized. My rule of thumb for data preprocessing:  
+The files should be tokenized. My rule of thumb for data preprocessing:
 
 * tokenize data
 * filter out sentences longer than 200-250
 * learn BPE
 * apply BPE
-* don't filter again  
+* don't filter again
 
-Transformer is known to not generalize well to sentences longer than what it's seen (see [this](https://arxiv.org/abs/1804.00247)), so we need long sentences during training. We don't have to worry about OOM because we always batch by number of tokens. Even a really long sentence of 250 words won't be have more than 2048/4096 BPE tokens.  
+Transformer is known to not generalize well to sentences longer than what it's seen (see [this](https://arxiv.org/abs/1804.00247)), so we need long sentences during training. We don't have to worry about OOM because we always batch by number of tokens. Even a really long sentence of 250 words won't be have more than 2048/4096 BPE tokens.
 
-After that, install [fastBPE](https://github.com/glample/fastBPE). Then run:  
+After that, install [fastBPE](https://github.com/glample/fastBPE). Then run:
 
-`python3 preprocessing.py --data-dir data --num-ops number_of_bpe_ops --pairs src_lang2tgt_lang --fast path_to_fastbpe_binary"`  
+`python3 preprocessing.py --data-dir data --num-ops number_of_bpe_ops --pairs src_lang2tgt_lang --fast path_to_fastbpe_binary"`
 
-This will:  
+This will:
 
 * sample sentences from `train.{src_lang, tgt_lang}` to a joint text file
 * learn bpe from that
 * bpe-encode the rest of files
 * create vocabularies
-* convert data into ids and save as `.npy` files  
+* convert data into ids and save as `.npy` files
 
-For example, if we're training an English-Vietnamese model (`en2vi`) using 8000 BPE operations, then the resultant directory looks like this:  
+For example, if we're training an English-Vietnamese model (`en2vi`) using 8000 BPE operations, then the resultant directory looks like this:
 
 ```
 data
@@ -75,24 +75,24 @@ data
 └── vocab.joint
 ```
 ## Usage
-To train a new model:  
+To train a new model:
 
 * write a new configuration function in `configurations.py`
-* run `python3 main.py --mode train --data-dir ./data --dump-dir ./dump --pairs src_lang2tgt_lang --config config_name`  
+* run `python3 main.py --mode train --data-dir ./data --dump-dir ./dump --pairs src_lang2tgt_lang --config config_name`
 
-Note that I separate the two configs:  
+Note that I separate the two configs:
 
 * hyperparameters/training options: in `configurations.py`
-* what pairs are we training on, are we training or translating...: just see `main.py`  
+* what pairs are we training on, are we training or translating...: just see `main.py`
 
-Training is logged in `dump/DEBUG.log`. During training, the model is validated on the dev set, and the best checkpoint is saved to `dump/model-SCORE.pth` (also `dump/src_lang2tgt_lang-SCORE.pth`, they are the same). All best/beam translations, final training stats (train/dev perplexities)... are stored in `dump` as well.  
+Training is logged in `dump/DEBUG.log`. During training, the model is validated on the dev set, and the best checkpoint is saved to `dump/model-SCORE.pth` (also `dump/src_lang2tgt_lang-SCORE.pth`, they are the same). All best/beam translations, final training stats (train/dev perplexities)... are stored in `dump` as well.
 
-To translate using a checkpoint, run:  
+To translate using a checkpoint, run:
 
-`python3 main.py --mode translate --data-dir ./data --dump-dir ./dump --pairs src_lang2tgt_lang --files-langs data/src_lang2tgt_lang/temp,src_lang,tgt_lang --config src_lang2tgt_lang --model-file dump/src_lang2tgt_lang-SCORE.pth`  
+`python3 main.py --mode translate --data-dir ./data --dump-dir ./dump --pairs src_lang2tgt_lang --files-langs data/src_lang2tgt_lang/temp,src_lang,tgt_lang --config src_lang2tgt_lang --model-file dump/src_lang2tgt_lang-SCORE.pth`
 
 ## Options
-Many options in `configurations.py` are pretty important:  
+Many options in `configurations.py` are pretty important:
 
 * ``use_bias``: if set to False, all linear layer won't use bias. Default to True which uses bias.
 * ``fix_norm``: fix the word embedding norm to 1 by dividing each word embedding vector by its l2 norm ([Improving Lexical Choice in Neural Machine Translation](https://aclweb.org/anthology/N18-1031))
@@ -124,7 +124,7 @@ Because this is my *re*-implementation from memory, there are many pieces of inf
 If there are any questions, feel free to send me an email (email address in the paper).
 
 ## References
-Parts of code/scripts are inspired/borrowed from:  
+Parts of code/scripts are inspired/borrowed from:
 
 * [fairseq](https://github.com/pytorch/fairseq)
 * [blocks](https://github.com/mila-iqia/blocks)
